@@ -19,3 +19,12 @@ public record AuthResponse(
     string Role,
     DateTime ExpiresAt
 );
+
+public record UserDto(
+    int Id,
+    string Username,
+    string Email,
+    string Role,
+    DateTime CreatedAt,
+    bool IsActive
+);

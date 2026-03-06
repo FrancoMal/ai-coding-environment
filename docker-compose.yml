@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -51,6 +49,19 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  workspace:
+    build:
+      context: ./workspace
+      dockerfile: Dockerfile
+    container_name: aicoding-workspace
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - workspace_data:/home/developer/workspace
+    networks:
+      - aicoding-net
+    restart: unless-stopped
+
   web:
     image: nginx:alpine
     container_name: aicoding-web
@@ -63,6 +74,7 @@ services:
       - aicoding-net
     depends_on:
       - api
+      - workspace
     restart: unless-stopped
 
 networks:
@@ -71,3 +83,4 @@ networks:
 
 volumes:
   sqlserver_data:
+  workspace_data:

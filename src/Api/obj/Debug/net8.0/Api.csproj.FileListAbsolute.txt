@@ -136,3 +136,4 @@ C:\Users\Usuario\clawd\projects\ai-coding-environment\src\Api\obj\Debug\net8.0\r
 C:\Users\Usuario\clawd\projects\ai-coding-environment\src\Api\obj\Debug\net8.0\Api.pdb
 C:\Users\Usuario\clawd\projects\ai-coding-environment\src\Api\obj\Debug\net8.0\Api.genruntimeconfig.cache
 C:\Users\Usuario\clawd\projects\ai-coding-environment\src\Api\obj\Debug\net8.0\ref\Api.dll
+C:\Users\Usuario\clawd\projects\ai-coding-environment\src\Api\obj\Debug\net8.0\Api.sourcelink.json

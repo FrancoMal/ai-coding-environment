@@ -1,15 +1,13 @@
 /* ============================================================
-   CashFlow Dashboard - API Client Module
-   Fetch wrapper with JWT, typed helpers for financial endpoints
+   Tu Marca - API Client Module
+   Minimal fetch wrapper with JWT authentication
    ============================================================ */
 
 const Api = (() => {
   const BASE_URL = '/api';
 
   function headers(extra) {
-    const h = {
-      'Content-Type': 'application/json'
-    };
+    const h = { 'Content-Type': 'application/json' };
     if (extra) {
       Object.assign(h, extra);
     }
@@ -56,129 +54,21 @@ const Api = (() => {
 
   function get(path) { return request('GET', path); }
   function post(path, body) { return request('POST', path, body); }
-  function put(path, body) { return request('PUT', path, body); }
-  function del(path) { return request('DELETE', path); }
 
-  /* ============================================================
-     Dashboard endpoints
-     ============================================================ */
-  function getDashboardStats(month, year) {
-    return get('/dashboard/stats?month=' + month + '&year=' + year);
+  /* --- Endpoints --- */
+
+  function getDashboardStats() {
+    return get('/dashboard/stats');
   }
 
-  function getDashboardAccounts() {
-    return get('/dashboard/accounts');
-  }
-
-  function getExpensesByCategory(month, year) {
-    return get('/dashboard/expenses-by-category?month=' + month + '&year=' + year);
-  }
-
-  function getMonthlyTrend(months) {
-    return get('/dashboard/monthly-trend?months=' + (months || 12));
-  }
-
-  /* ============================================================
-     Transactions
-     ============================================================ */
-  function getTransactions(filters) {
-    const params = new URLSearchParams();
-    if (filters.dateFrom && filters.dateTo) {
-      params.append('dateFrom', filters.dateFrom);
-      params.append('dateTo', filters.dateTo);
-    } else {
-      if (filters.month) params.append('month', filters.month);
-      if (filters.year) params.append('year', filters.year);
-    }
-    if (filters.type) params.append('type', filters.type);
-    if (filters.category) params.append('category', filters.category);
-    if (filters.search) params.append('search', filters.search);
-    if (filters.page) params.append('page', filters.page);
-    if (filters.pageSize) params.append('pageSize', filters.pageSize);
-    if (filters.account) params.append('account', filters.account);
-    return get('/transactions?' + params.toString());
-  }
-
-  function createTransaction(data) {
-    return post('/transactions', data);
-  }
-
-  function updateTransaction(id, data) {
-    return put('/transactions/' + id, data);
-  }
-
-  function deleteTransaction(id) {
-    return del('/transactions/' + id);
-  }
-
-  /* ============================================================
-     Accounts
-     ============================================================ */
-  function getAccounts() {
-    return get('/accounts');
-  }
-
-  function createAccount(data) {
-    return post('/accounts', data);
-  }
-
-  function updateAccount(id, data) {
-    return put('/accounts/' + id, data);
-  }
-
-  function deleteAccount(id) {
-    return del('/accounts/' + id);
-  }
-
-  /* ============================================================
-     Categories
-     ============================================================ */
-  function getCategories() {
-    return get('/categories');
-  }
-
-  function createCategory(data) {
-    return post('/categories', data);
-  }
-
-  function updateCategory(id, data) {
-    return put('/categories/' + id, data);
-  }
-
-  function deleteCategory(id) {
-    return del('/categories/' + id);
-  }
-
-  /* ============================================================
-     Exchange Rates
-     ============================================================ */
-  function getExchangeRates() {
-    return get('/exchange-rates');
-  }
-
-  function updateExchangeRate(data) {
-    return put('/exchange-rates', data);
+  function getMe() {
+    return get('/auth/me');
   }
 
   return {
-    get, post, put, del,
+    get,
+    post,
     getDashboardStats,
-    getDashboardAccounts,
-    getExpensesByCategory,
-    getMonthlyTrend,
-    getTransactions,
-    createTransaction,
-    updateTransaction,
-    deleteTransaction,
-    getAccounts,
-    createAccount,
-    updateAccount,
-    deleteAccount,
-    getCategories,
-    createCategory,
-    updateCategory,
-    deleteCategory,
-    getExchangeRates,
-    updateExchangeRate
+    getMe
   };
 })();

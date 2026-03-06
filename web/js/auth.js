@@ -1,12 +1,12 @@
 /* ============================================================
-   CashFlow Dashboard - Authentication Module
+   Tu Marca - Authentication Module
    JWT token management, login/logout, session checks
    ============================================================ */
 
 const Auth = (() => {
-  const TOKEN_KEY = 'cf_token';
-  const USER_KEY = 'cf_user';
-  const EXPIRY_KEY = 'cf_expires';
+  const TOKEN_KEY = 'tm_token';
+  const USER_KEY = 'tm_user';
+  const EXPIRY_KEY = 'tm_expires';
 
   function saveSession(data) {
     localStorage.setItem(TOKEN_KEY, data.token);

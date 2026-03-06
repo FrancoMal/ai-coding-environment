@@ -68,7 +68,7 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "CashFlow - Financial Management API",
+        Title = "Template API",
         Version = "v1"
     });
 
