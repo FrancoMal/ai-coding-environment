@@ -22,7 +22,7 @@ public class AuthService
 
     public async Task<AuthResponse?> Login(string username, string password)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == username);
+        var user = await _db.Users.Include(u => u.RoleNav).FirstOrDefaultAsync(u => u.Username == username);
         if (user is null || !user.IsActive)
             return null;
 
@@ -45,7 +45,8 @@ public class AuthService
             Username = username,
             Email = email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
-            Role = "user",
+            Role = "usuario",
+            RoleId = 2,
             CreatedAt = DateTime.UtcNow,
             IsActive = true
         };
@@ -66,7 +67,7 @@ public class AuthService
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Name, user.Username),
             new Claim(ClaimTypes.Email, user.Email),
-            new Claim(ClaimTypes.Role, user.Role)
+            new Claim(ClaimTypes.Role, user.RoleNav?.Name ?? user.Role)
         };
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
@@ -84,7 +85,7 @@ public class AuthService
         return new AuthResponse(
             Token: new JwtSecurityTokenHandler().WriteToken(token),
             Username: user.Username,
-            Role: user.Role,
+            Role: user.RoleNav?.Name ?? user.Role,
             ExpiresAt: expiresAt
         );
     }

@@ -1,0 +1,902 @@
+@page "/publicaciones"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject ToastService ToastService
+
+<div class="view-header">
+    <h2>Publicaciones de MercadoLibre</h2>
+    <p class="view-subtitle">Items publicados en tus cuentas de MercadoLibre</p>
+</div>
+
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h3>Publicaciones (@totalItems)</h3>
+        <button class="btn btn-primary" @onclick="SyncItems" disabled="@isSyncing">
+            @(isSyncing ? "Sincronizando..." : "Sincronizar")
+        </button>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        @if (isLoading)
+        {
+            <p class="text-muted" style="padding: 1.5rem;">Cargando publicaciones...</p>
+        }
+        else if (items is null || !items.Any())
+        {
+            <p class="text-muted" style="padding: 1.5rem;">No hay publicaciones. Hace clic en "Sincronizar" para traer los items de MercadoLibre.</p>
+        }
+        else
+        {
+            <!-- View mode toggle -->
+            <div class="view-mode-bar">
+                <button class="view-mode-btn @(viewMode == "flat" ? "active" : "")" @onclick='() => viewMode = "flat"'>Lista</button>
+                <button class="view-mode-btn @(viewMode == "family" ? "active" : "")" @onclick='() => viewMode = "family"'>Por Familia</button>
+                <button class="view-mode-btn @(viewMode == "product" ? "active" : "")" @onclick='() => viewMode = "product"'>Por Producto</button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <!-- Imagen -->
+                            <th class="th-img">Img</th>
+                            <!-- Titulo: text input -->
+                            <th class="th-filterable" style="min-width: 200px;">
+                                <div class="th-filter-inner">
+                                    <input type="text" class="th-filter-input @(IsFilterActive("titulo") ? "has-filter" : "")" placeholder="Titulo"
+                                           value='@GetTextFilter("titulo")' @oninput='(e) => SetTextFilter("titulo", e.Value?.ToString() ?? "")' />
+                                    <span class="sort-icon" @onclick='() => ToggleSort("titulo")' title="Ordenar">
+                                        <span class="@(sortColumn == "titulo" && sortAsc ? "sort-up-active" : "")">&#9650;</span>
+                                        <span class="@(sortColumn == "titulo" && !sortAsc ? "sort-down-active" : "")">&#9660;</span>
+                                    </span>
+                                </div>
+                            </th>
+                            <!-- SKU: text input -->
+                            <th class="th-filterable">
+                                <div class="th-filter-inner">
+                                    <input type="text" class="th-filter-input @(IsFilterActive("sku") ? "has-filter" : "")" placeholder="SKU"
+                                           value='@GetTextFilter("sku")' @oninput='(e) => SetTextFilter("sku", e.Value?.ToString() ?? "")' />
+                                    <span class="sort-icon" @onclick='() => ToggleSort("sku")' title="Ordenar">
+                                        <span class="@(sortColumn == "sku" && sortAsc ? "sort-up-active" : "")">&#9650;</span>
+                                        <span class="@(sortColumn == "sku" && !sortAsc ? "sort-down-active" : "")">&#9660;</span>
+                                    </span>
+                                </div>
+                            </th>
+                            <!-- Precio: sort only -->
+                            <th class="th-sortable" @onclick='() => ToggleSort("precio")'>
+                                <div class="th-inner">
+                                    <span class="th-label">Precio</span>
+                                    <span class="sort-icon">
+                                        <span class="@(sortColumn == "precio" && sortAsc ? "sort-up-active" : "")">&#9650;</span>
+                                        <span class="@(sortColumn == "precio" && !sortAsc ? "sort-down-active" : "")">&#9660;</span>
+                                    </span>
+                                </div>
+                            </th>
+                            <!-- Stock: sort only -->
+                            <th class="th-sortable" @onclick='() => ToggleSort("stock")'>
+                                <div class="th-inner">
+                                    <span class="th-label">Stock</span>
+                                    <span class="sort-icon">
+                                        <span class="@(sortColumn == "stock" && sortAsc ? "sort-up-active" : "")">&#9650;</span>
+                                        <span class="@(sortColumn == "stock" && !sortAsc ? "sort-down-active" : "")">&#9660;</span>
+                                    </span>
+                                </div>
+                            </th>
+                            <!-- Vendidos: sort only -->
+                            <th class="th-sortable" @onclick='() => ToggleSort("vendidos")'>
+                                <div class="th-inner">
+                                    <span class="th-label">Vendidos</span>
+                                    <span class="sort-icon">
+                                        <span class="@(sortColumn == "vendidos" && sortAsc ? "sort-up-active" : "")">&#9650;</span>
+                                        <span class="@(sortColumn == "vendidos" && !sortAsc ? "sort-down-active" : "")">&#9660;</span>
+                                    </span>
+                                </div>
+                            </th>
+                            <!-- Estado: checkbox dropdown -->
+                            <th class="th-dropdown">
+                                <div class="th-inner">
+                                    <span class="th-label" @onclick='() => ToggleSort("estado")'>Estado</span>
+                                    <span class="th-icons">
+                                        <span class="sort-icon" @onclick='() => ToggleSort("estado")'>
+                                            <span class="@(sortColumn == "estado" && sortAsc ? "sort-up-active" : "")">&#9650;</span>
+                                            <span class="@(sortColumn == "estado" && !sortAsc ? "sort-down-active" : "")">&#9660;</span>
+                                        </span>
+                                        <button class="filter-btn @(IsCheckboxFilterActive("estado") ? "filter-active" : "")" @onclick='() => ToggleDropdownFilter("estado")' @onclick:stopPropagation="true" title="Filtrar">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+                                        </button>
+                                    </span>
+                                </div>
+                                @if (activeFilterColumn == "estado")
+                                {
+                                    <div class="column-filter-dropdown" @onclick:stopPropagation="true">
+                                        <div class="filter-checkbox-list">
+                                            @foreach (var val in GetUniqueValues("estado"))
+                                            {
+                                                var v = val;
+                                                <label class="filter-checkbox-item">
+                                                    <input type="checkbox" checked="@IsCheckboxChecked("estado", v)" @onchange='() => ToggleCheckboxValue("estado", v)' />
+                                                    @v
+                                                </label>
+                                            }
+                                        </div>
+                                        @if (IsCheckboxFilterActive("estado"))
+                                        {
+                                            <div class="filter-actions"><button class="filter-clear-btn" @onclick='() => ClearCheckboxFilter("estado")'>Limpiar</button></div>
+                                        }
+                                    </div>
+                                }
+                            </th>
+                            <!-- Tipo: checkbox dropdown -->
+                            <th class="th-dropdown">
+                                <div class="th-inner">
+                                    <span class="th-label" @onclick='() => ToggleSort("tipo")'>Tipo</span>
+                                    <span class="th-icons">
+                                        <span class="sort-icon" @onclick='() => ToggleSort("tipo")'>
+                                            <span class="@(sortColumn == "tipo" && sortAsc ? "sort-up-active" : "")">&#9650;</span>
+                                            <span class="@(sortColumn == "tipo" && !sortAsc ? "sort-down-active" : "")">&#9660;</span>
+                                        </span>
+                                        <button class="filter-btn @(IsCheckboxFilterActive("tipo") ? "filter-active" : "")" @onclick='() => ToggleDropdownFilter("tipo")' @onclick:stopPropagation="true" title="Filtrar">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+                                        </button>
+                                    </span>
+                                </div>
+                                @if (activeFilterColumn == "tipo")
+                                {
+                                    <div class="column-filter-dropdown" @onclick:stopPropagation="true">
+                                        <div class="filter-checkbox-list">
+                                            @foreach (var val in GetUniqueValues("tipo"))
+                                            {
+                                                var v = val;
+                                                <label class="filter-checkbox-item">
+                                                    <input type="checkbox" checked="@IsCheckboxChecked("tipo", v)" @onchange='() => ToggleCheckboxValue("tipo", v)' />
+                                                    @v
+                                                </label>
+                                            }
+                                        </div>
+                                        @if (IsCheckboxFilterActive("tipo"))
+                                        {
+                                            <div class="filter-actions"><button class="filter-clear-btn" @onclick='() => ClearCheckboxFilter("tipo")'>Limpiar</button></div>
+                                        }
+                                    </div>
+                                }
+                            </th>
+                            <!-- Cuenta: checkbox dropdown -->
+                            <th class="th-dropdown">
+                                <div class="th-inner">
+                                    <span class="th-label" @onclick='() => ToggleSort("cuenta")'>Cuenta</span>
+                                    <span class="th-icons">
+                                        <span class="sort-icon" @onclick='() => ToggleSort("cuenta")'>
+                                            <span class="@(sortColumn == "cuenta" && sortAsc ? "sort-up-active" : "")">&#9650;</span>
+                                            <span class="@(sortColumn == "cuenta" && !sortAsc ? "sort-down-active" : "")">&#9660;</span>
+                                        </span>
+                                        <button class="filter-btn @(IsCheckboxFilterActive("cuenta") ? "filter-active" : "")" @onclick='() => ToggleDropdownFilter("cuenta")' @onclick:stopPropagation="true" title="Filtrar">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+                                        </button>
+                                    </span>
+                                </div>
+                                @if (activeFilterColumn == "cuenta")
+                                {
+                                    <div class="column-filter-dropdown" @onclick:stopPropagation="true">
+                                        <div class="filter-checkbox-list">
+                                            @foreach (var val in GetUniqueValues("cuenta"))
+                                            {
+                                                var v = val;
+                                                <label class="filter-checkbox-item">
+                                                    <input type="checkbox" checked="@IsCheckboxChecked("cuenta", v)" @onchange='() => ToggleCheckboxValue("cuenta", v)' />
+                                                    @v
+                                                </label>
+                                            }
+                                        </div>
+                                        @if (IsCheckboxFilterActive("cuenta"))
+                                        {
+                                            <div class="filter-actions"><button class="filter-clear-btn" @onclick='() => ClearCheckboxFilter("cuenta")'>Limpiar</button></div>
+                                        }
+                                    </div>
+                                }
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (viewMode == "flat")
+                        {
+                            @foreach (var item in GetFilteredAndSortedItems())
+                            {
+                                <tr>
+                                    <td style="text-align: center;">
+                                        @if (!string.IsNullOrEmpty(item.Thumbnail))
+                                        {
+                                            <img src="@item.Thumbnail" alt="" class="item-thumbnail" />
+                                        }
+                                        else
+                                        {
+                                            <div class="item-thumb-placeholder">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="#9ca3af"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(item.Permalink))
+                                        {
+                                            <a href="@item.Permalink" target="_blank" class="item-link" title="@item.MeliItemId">@Truncate(item.Title, 50)</a>
+                                        }
+                                        else
+                                        {
+                                            <span title="@item.MeliItemId">@Truncate(item.Title, 50)</span>
+                                        }
+                                        <div class="item-id">@item.MeliItemId</div>
+                                    </td>
+                                    <td>@(item.Sku ?? "-")</td>
+                                    <td>@item.CurrencyId @item.Price.ToString("N2")</td>
+                                    <td>@item.AvailableQuantity</td>
+                                    <td>@item.SoldQuantity</td>
+                                    <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
+                                    <td>@GetListingTypeLabel(item.ListingTypeId)</td>
+                                    <td>@item.AccountNickname</td>
+                                </tr>
+                            }
+                        }
+                        else if (viewMode == "family")
+                        {
+                            @foreach (var family in GetFamilyGroups())
+                            {
+                                <tr class="group-header-row">
+                                    <td colspan="9">
+                                        <strong>@(family.FamilyName ?? "Sin familia")</strong>
+                                        <small class="text-muted" style="margin-left: 0.5rem;">(@family.Items.Count items)</small>
+                                    </td>
+                                </tr>
+                                @foreach (var item in family.Items)
+                                {
+                                    <tr class="group-item-row">
+                                        <td style="text-align: center;">
+                                            @if (!string.IsNullOrEmpty(item.Thumbnail))
+                                            {
+                                                <img src="@item.Thumbnail" alt="" class="item-thumbnail" />
+                                            }
+                                            else
+                                            {
+                                                <div class="item-thumb-placeholder">
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#9ca3af"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(item.Permalink))
+                                            {
+                                                <a href="@item.Permalink" target="_blank" class="item-link" title="@item.MeliItemId">@Truncate(item.Title, 50)</a>
+                                            }
+                                            else
+                                            {
+                                                <span title="@item.MeliItemId">@Truncate(item.Title, 50)</span>
+                                            }
+                                            <div class="item-id">@item.MeliItemId</div>
+                                        </td>
+                                        <td>@(item.Sku ?? "-")</td>
+                                        <td>@item.CurrencyId @item.Price.ToString("N2")</td>
+                                        <td>@item.AvailableQuantity</td>
+                                        <td>@item.SoldQuantity</td>
+                                        <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
+                                        <td>@GetListingTypeLabel(item.ListingTypeId)</td>
+                                        <td>@item.AccountNickname</td>
+                                    </tr>
+                                }
+                            }
+                        }
+                        else if (viewMode == "product")
+                        {
+                            @foreach (var product in GetProductGroups())
+                            {
+                                @if (product.Items.Count > 1)
+                                {
+                                    <tr class="group-header-row">
+                                        <td colspan="9">
+                                            <strong>@Truncate(product.Title, 60)</strong>
+                                            <small class="text-muted" style="margin-left: 0.5rem;">(@product.Items.Count variaciones)</small>
+                                        </td>
+                                    </tr>
+                                    @foreach (var item in product.Items)
+                                    {
+                                        <tr class="group-item-row">
+                                            <td style="text-align: center;">
+                                                @if (!string.IsNullOrEmpty(item.Thumbnail))
+                                                {
+                                                    <img src="@item.Thumbnail" alt="" class="item-thumbnail" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="item-thumb-placeholder">
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#9ca3af"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                                                    </div>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(item.Permalink))
+                                                {
+                                                    <a href="@item.Permalink" target="_blank" class="item-link" title="@item.MeliItemId">@Truncate(item.Title, 50)</a>
+                                                }
+                                                else
+                                                {
+                                                    <span title="@item.MeliItemId">@Truncate(item.Title, 50)</span>
+                                                }
+                                                <div class="item-id">@item.MeliItemId</div>
+                                            </td>
+                                            <td>@(item.Sku ?? "-")</td>
+                                            <td>@item.CurrencyId @item.Price.ToString("N2")</td>
+                                            <td>@item.AvailableQuantity</td>
+                                            <td>@item.SoldQuantity</td>
+                                            <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
+                                            <td>@GetListingTypeLabel(item.ListingTypeId)</td>
+                                            <td>@item.AccountNickname</td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    var item = product.Items[0];
+                                    <tr>
+                                        <td style="text-align: center;">
+                                            @if (!string.IsNullOrEmpty(item.Thumbnail))
+                                            {
+                                                <img src="@item.Thumbnail" alt="" class="item-thumbnail" />
+                                            }
+                                            else
+                                            {
+                                                <div class="item-thumb-placeholder">
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#9ca3af"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(item.Permalink))
+                                            {
+                                                <a href="@item.Permalink" target="_blank" class="item-link" title="@item.MeliItemId">@Truncate(item.Title, 50)</a>
+                                            }
+                                            else
+                                            {
+                                                <span title="@item.MeliItemId">@Truncate(item.Title, 50)</span>
+                                            }
+                                            <div class="item-id">@item.MeliItemId</div>
+                                        </td>
+                                        <td>@(item.Sku ?? "-")</td>
+                                        <td>@item.CurrencyId @item.Price.ToString("N2")</td>
+                                        <td>@item.AvailableQuantity</td>
+                                        <td>@item.SoldQuantity</td>
+                                        <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
+                                        <td>@GetListingTypeLabel(item.ListingTypeId)</td>
+                                        <td>@item.AccountNickname</td>
+                                    </tr>
+                                }
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@if (activeFilterColumn is not null)
+{
+    <div class="filter-overlay" @onclick="CloseAllDropdowns"></div>
+}
+
+<style>
+    /* View mode toggle */
+    .view-mode-bar {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .view-mode-btn {
+        padding: 0.375rem 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: white;
+        color: #374151;
+        cursor: pointer;
+        font-size: 0.8125rem;
+        transition: all 0.15s;
+    }
+    .view-mode-btn.active {
+        background: #4f46e5;
+        color: white;
+        border-color: #4f46e5;
+    }
+    .view-mode-btn:hover:not(.active) {
+        background: #f3f4f6;
+    }
+
+    /* Thumbnail column */
+    .th-img { width: 50px; text-align: center; }
+    .item-thumbnail {
+        width: 40px;
+        height: 40px;
+        object-fit: cover;
+        border-radius: 4px;
+        border: 1px solid #e5e7eb;
+    }
+    .item-thumb-placeholder {
+        width: 40px;
+        height: 40px;
+        background: #f3f4f6;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Group rows */
+    .group-header-row {
+        background: #f0f4ff;
+        border-left: 3px solid #4f46e5;
+    }
+    .group-header-row td {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.85rem;
+    }
+    .group-item-row {
+        background: #fafbff;
+        font-size: 0.9em;
+    }
+
+    /* Column headers - reuse from Ordenes */
+    .th-sortable {
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    }
+    .th-inner {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .th-label { flex: 1; }
+    .th-icons {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        margin-left: 0.4rem;
+    }
+    .th-dropdown {
+        position: relative;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    }
+    .th-filterable {
+        white-space: nowrap;
+        padding: 0.3rem 0.4rem !important;
+    }
+    .th-filter-inner {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    .th-filter-input {
+        flex: 1;
+        min-width: 0;
+        padding: 0.3rem 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        outline: none;
+        background: white;
+        color: #1f2937;
+        box-sizing: border-box;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .th-filter-input::placeholder {
+        color: #6b7280;
+        font-weight: 600;
+    }
+    .th-filter-input:focus {
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+    }
+    .th-filter-input.has-filter {
+        border-color: #4f46e5;
+        background: #f5f3ff;
+    }
+    .sort-icon {
+        display: inline-flex;
+        flex-direction: column;
+        gap: 1px;
+        cursor: pointer;
+        padding: 0.2rem;
+        border-radius: 4px;
+        flex-shrink: 0;
+    }
+    .sort-icon:hover { background: rgba(0,0,0,0.06); }
+    .sort-icon span {
+        display: block;
+        font-size: 0.5rem;
+        line-height: 1;
+        color: #c8ccd4;
+        transition: color 0.15s;
+    }
+    .sort-icon .sort-up-active { color: #4f46e5; }
+    .sort-icon .sort-down-active { color: #4f46e5; }
+    .filter-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0.2rem 0.25rem;
+        display: inline-flex;
+        align-items: center;
+        color: #c8ccd4;
+        font-size: 0.7rem;
+        border-radius: 4px;
+        transition: color 0.15s, background 0.15s;
+    }
+    .filter-btn:hover {
+        color: #6b7280;
+        background: rgba(0,0,0,0.06);
+    }
+    .filter-btn.filter-active {
+        color: #4f46e5;
+        background: rgba(79, 70, 229, 0.08);
+    }
+    .column-filter-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        z-index: 1001;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        min-width: 180px;
+        max-width: 250px;
+        padding: 0.5rem;
+        margin-top: 0.25rem;
+    }
+    .filter-checkbox-list {
+        max-height: 200px;
+        overflow-y: auto;
+        margin-bottom: 0.4rem;
+    }
+    .filter-checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.25rem 0.3rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+    }
+    .filter-checkbox-item:hover { background: #f3f4f6; }
+    .filter-checkbox-item input[type="checkbox"] {
+        margin: 0;
+        cursor: pointer;
+    }
+    .filter-actions {
+        display: flex;
+        justify-content: flex-end;
+        padding-top: 0.3rem;
+        border-top: 1px solid #e5e7eb;
+    }
+    .filter-clear-btn {
+        background: none;
+        border: none;
+        color: #ef4444;
+        font-size: 0.75rem;
+        cursor: pointer;
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+    }
+    .filter-clear-btn:hover { background: #fef2f2; }
+    .filter-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+    }
+
+    /* Item link */
+    .item-link {
+        color: #1f2937;
+        text-decoration: none;
+    }
+    .item-link:hover {
+        color: #4f46e5;
+        text-decoration: underline;
+    }
+    .item-id {
+        font-size: 0.7rem;
+        color: #9ca3af;
+    }
+
+    /* Status badges for items */
+    .status-active { background: #ecfdf5; color: #059669; }
+    .status-paused { background: #fffbeb; color: #d97706; }
+    .status-closed { background: #f3f4f6; color: #6b7280; }
+    .status-review { background: #eff6ff; color: #3b82f6; }
+</style>
+
+@code {
+    private List<MeliItemDto>? items;
+    private bool isLoading = true;
+    private bool isSyncing;
+    private int totalItems;
+
+    // View mode
+    private string viewMode = "flat";
+
+    // Sort state
+    private string? sortColumn;
+    private bool sortAsc = true;
+
+    // Text filter state
+    private Dictionary<string, string> textFilters = new();
+
+    // Checkbox filter state
+    private string? activeFilterColumn;
+    private Dictionary<string, HashSet<string>> checkboxFilters = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadItems();
+    }
+
+    private async Task LoadItems()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Api.GetMeliItemsAsync();
+            if (response is not null)
+            {
+                items = response.Items;
+                totalItems = response.Total;
+            }
+        }
+        catch
+        {
+            ToastService.Error("Error al cargar las publicaciones");
+            items = new();
+        }
+
+        isLoading = false;
+    }
+
+    private async Task SyncItems()
+    {
+        isSyncing = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await Api.SyncMeliItemsAsync();
+            if (result is not null)
+            {
+                if (result.TotalErrors > 0)
+                    ToastService.Warning($"Sincronizados {result.TotalSynced} items con {result.TotalErrors} errores");
+                else
+                    ToastService.Success($"Sincronizados {result.TotalSynced} items");
+            }
+            await LoadItems();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error al sincronizar: " + ex.Message);
+        }
+
+        isSyncing = false;
+    }
+
+    // --- Sort ---
+    private void ToggleSort(string column)
+    {
+        if (sortColumn == column)
+            sortAsc = !sortAsc;
+        else
+        {
+            sortColumn = column;
+            sortAsc = true;
+        }
+    }
+
+    // --- Text Filters ---
+    private void SetTextFilter(string column, string value)
+    {
+        textFilters[column] = value;
+    }
+
+    private string GetTextFilter(string column)
+    {
+        return textFilters.TryGetValue(column, out var val) ? val : "";
+    }
+
+    private bool IsFilterActive(string column)
+    {
+        return textFilters.TryGetValue(column, out var tv) && !string.IsNullOrEmpty(tv);
+    }
+
+    // --- Checkbox Filters ---
+    private void ToggleDropdownFilter(string column)
+    {
+        if (activeFilterColumn == column)
+            activeFilterColumn = null;
+        else
+            activeFilterColumn = column;
+    }
+
+    private void ToggleCheckboxValue(string column, string value)
+    {
+        if (!checkboxFilters.ContainsKey(column))
+            checkboxFilters[column] = new HashSet<string>();
+        if (!checkboxFilters[column].Remove(value))
+            checkboxFilters[column].Add(value);
+    }
+
+    private bool IsCheckboxChecked(string column, string value)
+    {
+        return checkboxFilters.TryGetValue(column, out var set) && set.Contains(value);
+    }
+
+    private bool IsCheckboxFilterActive(string column)
+    {
+        return checkboxFilters.TryGetValue(column, out var cv) && cv.Count > 0;
+    }
+
+    private List<string> GetUniqueValues(string column)
+    {
+        if (items is null) return new();
+        var values = column switch
+        {
+            "estado" => items.Select(i => GetStatusLabel(i.Status)).Distinct(),
+            "tipo" => items.Select(i => GetListingTypeLabel(i.ListingTypeId)).Distinct(),
+            "cuenta" => items.Select(i => i.AccountNickname).Distinct(),
+            _ => Enumerable.Empty<string>()
+        };
+        return values.OrderBy(v => v).ToList();
+    }
+
+    private void ClearCheckboxFilter(string column)
+    {
+        checkboxFilters.Remove(column);
+        activeFilterColumn = null;
+    }
+
+    private void CloseAllDropdowns()
+    {
+        activeFilterColumn = null;
+    }
+
+    // --- Filtered + Sorted ---
+    private List<MeliItemDto> GetFilteredAndSortedItems()
+    {
+        if (items is null) return new();
+
+        var filtered = items.AsEnumerable();
+
+        // Text filters
+        foreach (var kv in textFilters.Where(f => !string.IsNullOrEmpty(f.Value)))
+        {
+            var search = kv.Value;
+            filtered = kv.Key switch
+            {
+                "titulo" => filtered.Where(i => i.Title.Contains(search, StringComparison.OrdinalIgnoreCase)),
+                "sku" => filtered.Where(i => (i.Sku ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)),
+                _ => filtered
+            };
+        }
+
+        // Checkbox filters
+        foreach (var kv in checkboxFilters.Where(f => f.Value.Count > 0))
+        {
+            var values = kv.Value;
+            filtered = kv.Key switch
+            {
+                "estado" => filtered.Where(i => values.Contains(GetStatusLabel(i.Status))),
+                "tipo" => filtered.Where(i => values.Contains(GetListingTypeLabel(i.ListingTypeId))),
+                "cuenta" => filtered.Where(i => values.Contains(i.AccountNickname)),
+                _ => filtered
+            };
+        }
+
+        var list = filtered.ToList();
+
+        // Sort
+        if (sortColumn is not null)
+        {
+            list = sortColumn switch
+            {
+                "titulo" => sortAsc ? list.OrderBy(i => i.Title).ToList() : list.OrderByDescending(i => i.Title).ToList(),
+                "sku" => sortAsc ? list.OrderBy(i => i.Sku).ToList() : list.OrderByDescending(i => i.Sku).ToList(),
+                "precio" => sortAsc ? list.OrderBy(i => i.Price).ToList() : list.OrderByDescending(i => i.Price).ToList(),
+                "stock" => sortAsc ? list.OrderBy(i => i.AvailableQuantity).ToList() : list.OrderByDescending(i => i.AvailableQuantity).ToList(),
+                "vendidos" => sortAsc ? list.OrderBy(i => i.SoldQuantity).ToList() : list.OrderByDescending(i => i.SoldQuantity).ToList(),
+                "estado" => sortAsc ? list.OrderBy(i => i.Status).ToList() : list.OrderByDescending(i => i.Status).ToList(),
+                "tipo" => sortAsc ? list.OrderBy(i => i.ListingTypeId).ToList() : list.OrderByDescending(i => i.ListingTypeId).ToList(),
+                "cuenta" => sortAsc ? list.OrderBy(i => i.AccountNickname).ToList() : list.OrderByDescending(i => i.AccountNickname).ToList(),
+                _ => list
+            };
+        }
+
+        return list;
+    }
+
+    // --- Grouping ---
+    private List<FamilyGroup> GetFamilyGroups()
+    {
+        var filtered = GetFilteredAndSortedItems();
+        return filtered
+            .GroupBy(i => i.FamilyId ?? "__none__")
+            .Select(g => new FamilyGroup
+            {
+                FamilyId = g.Key,
+                FamilyName = g.First().FamilyName ?? "Sin familia",
+                Items = g.ToList()
+            })
+            .OrderBy(g => g.FamilyName == "Sin familia" ? 1 : 0)
+            .ThenBy(g => g.FamilyName)
+            .ToList();
+    }
+
+    private List<ProductGroup> GetProductGroups()
+    {
+        var filtered = GetFilteredAndSortedItems();
+        return filtered
+            .GroupBy(i => i.UserProductId ?? i.MeliItemId)
+            .Select(g => new ProductGroup
+            {
+                UserProductId = g.Key,
+                Title = g.First().Title,
+                Items = g.ToList()
+            })
+            .OrderBy(g => g.Title)
+            .ToList();
+    }
+
+    // --- Helpers ---
+    private string GetStatusClass(string status) => status switch
+    {
+        "active" => "status-active",
+        "paused" => "status-paused",
+        "closed" => "status-closed",
+        "under_review" => "status-review",
+        "inactive" => "status-closed",
+        _ => ""
+    };
+
+    private string GetStatusLabel(string status) => status switch
+    {
+        "active" => "Activa",
+        "paused" => "Pausada",
+        "closed" => "Cerrada",
+        "under_review" => "En revision",
+        "inactive" => "Inactiva",
+        _ => status
+    };
+
+    private string GetListingTypeLabel(string? type) => type switch
+    {
+        "gold_special" => "Premium",
+        "gold_pro" => "Oro Pro",
+        "gold" => "Oro",
+        "silver" => "Plata",
+        "bronze" => "Bronce",
+        "free" => "Gratis",
+        _ => type ?? "-"
+    };
+
+    private string Truncate(string text, int maxLength) =>
+        text.Length <= maxLength ? text : text[..maxLength] + "...";
+
+    // --- Group classes ---
+    private class FamilyGroup
+    {
+        public string FamilyId { get; set; } = "";
+        public string? FamilyName { get; set; }
+        public List<MeliItemDto> Items { get; set; } = new();
+    }
+
+    private class ProductGroup
+    {
+        public string UserProductId { get; set; } = "";
+        public string Title { get; set; } = "";
+        public List<MeliItemDto> Items { get; set; } = new();
+    }
+}

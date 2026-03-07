@@ -42,6 +42,13 @@ builder.Services.AddAuthorization();
 
 // Services
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<RoleService>();
+builder.Services.AddScoped<IntegrationService>();
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<MeliAccountService>();
+builder.Services.AddScoped<MeliOrderService>();
+builder.Services.AddScoped<MeliItemService>();
 
 // CORS
 builder.Services.AddCors(options =>

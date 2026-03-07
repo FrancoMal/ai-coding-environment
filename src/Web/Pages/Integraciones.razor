@@ -1,0 +1,471 @@
+@page "/integraciones"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject ToastService ToastService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<div class="view-header">
+    <h2>Integraciones</h2>
+    <p class="view-subtitle">Configura las integraciones con servicios externos</p>
+</div>
+
+<div class="integrations-grid">
+    <!-- MercadoLibre -->
+    <div class="integration-card @(mlActive ? "integration-active" : "")">
+        <div class="integration-card-header">
+            <div class="integration-logo">
+                <span class="integration-logo-icon ml-logo">ML</span>
+            </div>
+            <div class="integration-info">
+                <h3>MercadoLibre</h3>
+                <p>Conecta tu cuenta de MercadoLibre para gestionar publicaciones, ordenes y mas.</p>
+            </div>
+            <div class="integration-header-actions">
+                <span class="status-badge @(mlActive ? "status-active" : "status-inactive")">
+                    @(mlActive ? "Activa" : "Inactiva")
+                </span>
+                <button class="btn btn-secondary btn-sm" @onclick="OpenConfigModal">Configurar</button>
+            </div>
+        </div>
+
+        <!-- Cuentas conectadas -->
+        @if (mlId > 0 && mlActive)
+        {
+            <div class="integration-accounts">
+                <div class="integration-accounts-header">
+                    <h4>Cuentas conectadas</h4>
+                    <div class="connect-btn-wrapper">
+                        <button class="btn btn-primary" @onclick="ToggleConnectMenu" disabled="@connecting">
+                            @(connecting ? "Conectando..." : "+ Conectar cuenta")
+                        </button>
+                        @if (showConnectMenu)
+                        {
+                            <div class="connect-dropdown">
+                                <button class="connect-dropdown-item" @onclick="OpenInBrowser">
+                                    Abrir en navegador
+                                </button>
+                                <button class="connect-dropdown-item" @onclick="CopyAuthUrl">
+                                    @(urlCopied ? "URL copiada!" : "Copiar URL")
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @if (waitingForCode)
+                {
+                    <div class="code-input-section">
+                        <p class="code-input-instructions">Autoriza la aplicacion en MercadoLibre y luego pega aca el codigo que obtuviste:</p>
+                        <div class="code-input-row">
+                            <input type="text" class="form-input" @bind="authCode"
+                                   placeholder="Pega el codigo aca" />
+                            <button class="btn btn-primary" @onclick="SubmitCode" disabled="@connecting">
+                                @(connecting ? "Conectando..." : "Conectar")
+                            </button>
+                            <button class="btn btn-secondary" @onclick="CancelConnect">Cancelar</button>
+                        </div>
+                    </div>
+                }
+
+                @if (accounts is not null && accounts.Count > 0)
+                {
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Usuario</th>
+                                    <th>Email</th>
+                                    <th>ID MeLi</th>
+                                    <th>Token</th>
+                                    <th>Conectada</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var account in accounts)
+                                {
+                                    <tr>
+                                        <td><strong>@account.Nickname</strong></td>
+                                        <td>@(account.Email ?? "-")</td>
+                                        <td>@account.MeliUserId</td>
+                                        <td>
+                                            <span class="status-badge @(account.TokenValid ? "status-active" : "status-inactive")">
+                                                @(account.TokenValid ? "Valido" : "Expirado")
+                                            </span>
+                                        </td>
+                                        <td>@account.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                        <td>
+                                            <div class="actions-cell">
+                                                <button class="btn-icon btn-delete" @onclick="() => RemoveAccount(account.Id)"
+                                                        title="Quitar cuenta">
+                                                    @SvgIcons.Logout
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else if (!waitingForCode)
+                {
+                    <p class="text-muted" style="padding: 1rem 1.5rem;">No hay cuentas conectadas. Hace clic en "Conectar cuenta" para vincular tu cuenta de MercadoLibre.</p>
+                }
+            </div>
+        }
+        else if (mlId == 0)
+        {
+            <div style="padding: 1rem 1.5rem;">
+                <p class="text-muted">Configura la aplicacion para comenzar a conectar cuentas.</p>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal: Configuracion MercadoLibre -->
+@if (showConfigModal)
+{
+    <div class="modal-overlay" @onclick="CloseConfigModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Configuracion de MercadoLibre</h3>
+                <button class="btn-close" @onclick="CloseConfigModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(mlError))
+                {
+                    <div class="form-error">@mlError</div>
+                }
+                @if (mlSaved)
+                {
+                    <div class="form-success">Configuracion guardada correctamente</div>
+                }
+                <div class="form-group">
+                    <label class="form-label">APP ID</label>
+                    <input type="text" class="form-input" @bind="mlAppId"
+                           placeholder="Ej: 1234567890" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Secret Key</label>
+                    <div class="input-with-hint">
+                        <input type="password" class="form-input" @bind="mlSecret"
+                               placeholder="@(mlHasSecret ? "••••••••  (ya configurado)" : "Ingresa tu Secret Key")" />
+                        @if (mlHasSecret)
+                        {
+                            <span class="input-hint">Deja en blanco para mantener el actual</span>
+                        }
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">URL de redireccion (pagina de salida)</label>
+                    <input type="text" class="form-input" @bind="mlRedirectUrl"
+                           placeholder="Ej: https://tudominio.com/meli-callback" />
+                    <span class="input-hint">Esta URL se configura en tu aplicacion de MercadoLibre como Redirect URI</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">
+                        <input type="checkbox" @bind="mlActive" /> Integracion activa
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                @if (mlId > 0)
+                {
+                    <button class="btn btn-danger" @onclick="DeleteMercadoLibre" disabled="@saving">
+                        Eliminar
+                    </button>
+                }
+                <button class="btn btn-secondary" @onclick="CloseConfigModal">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SaveMercadoLibre" disabled="@saving">
+                    @(saving ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: Quitar cuenta -->
+@if (showDeleteConfirm)
+{
+    <div class="modal-overlay" @onclick="() => showDeleteConfirm = false">
+        <div class="modal-card modal-small" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Quitar cuenta</h3>
+                <button class="btn-close" @onclick="() => showDeleteConfirm = false">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Estas seguro de que queres desconectar esta cuenta de MercadoLibre? Se eliminara el acceso.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => showDeleteConfirm = false">Cancelar</button>
+                <button class="btn btn-danger" @onclick="ConfirmRemoveAccount">Quitar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // MercadoLibre config fields
+    private int mlId;
+    private string mlAppId = "";
+    private string mlSecret = "";
+    private string mlRedirectUrl = "";
+    private bool mlActive;
+    private bool mlHasSecret;
+    private string? mlError;
+    private bool mlSaved;
+    private bool saving;
+    private bool showConfigModal;
+
+    // Accounts
+    private List<MeliAccountDto>? accounts;
+    private bool connecting;
+    private bool showDeleteConfirm;
+    private int accountToDelete;
+
+    // Connect flow
+    private bool showConnectMenu;
+    private bool waitingForCode;
+    private string authCode = "";
+    private string? meliAuthUrl;
+    private bool urlCopied;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMercadoLibre();
+        await LoadAccounts();
+    }
+
+    private async Task LoadMercadoLibre()
+    {
+        try
+        {
+            var integration = await Api.GetIntegrationAsync("mercadolibre");
+            if (integration is not null)
+            {
+                mlId = integration.Id;
+                mlAppId = integration.AppId ?? "";
+                mlRedirectUrl = integration.RedirectUrl ?? "";
+                mlActive = integration.IsActive;
+                mlHasSecret = integration.HasSecret;
+            }
+        }
+        catch { }
+    }
+
+    private async Task LoadAccounts()
+    {
+        try
+        {
+            accounts = await Api.GetMeliAccountsAsync();
+        }
+        catch { accounts = new(); }
+    }
+
+    private void OpenConfigModal()
+    {
+        mlError = null;
+        mlSaved = false;
+        showConfigModal = true;
+    }
+
+    private void CloseConfigModal()
+    {
+        showConfigModal = false;
+        mlError = null;
+        mlSaved = false;
+    }
+
+    private async Task SaveMercadoLibre()
+    {
+        mlError = null;
+        mlSaved = false;
+        saving = true;
+
+        try
+        {
+            var request = new SaveIntegrationRequest
+            {
+                Provider = "mercadolibre",
+                AppId = mlAppId,
+                AppSecret = string.IsNullOrWhiteSpace(mlSecret) ? null : mlSecret,
+                RedirectUrl = mlRedirectUrl,
+                IsActive = mlActive
+            };
+
+            var result = await Api.SaveIntegrationAsync(request);
+            if (result is not null)
+            {
+                mlId = result.Id;
+                mlHasSecret = result.HasSecret;
+                mlSecret = "";
+                mlSaved = true;
+                ToastService.Success("Configuracion de MercadoLibre guardada");
+                showConfigModal = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            mlError = "Error al guardar: " + ex.Message;
+            ToastService.Error("Error al guardar la configuracion");
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteMercadoLibre()
+    {
+        saving = true;
+        mlError = null;
+
+        try
+        {
+            var deleted = await Api.DeleteIntegrationAsync("mercadolibre");
+            if (deleted)
+            {
+                mlId = 0;
+                mlAppId = "";
+                mlSecret = "";
+                mlRedirectUrl = "";
+                mlActive = false;
+                mlHasSecret = false;
+                accounts = new();
+                showConfigModal = false;
+                ToastService.Success("Integracion de MercadoLibre eliminada");
+            }
+        }
+        catch
+        {
+            mlError = "Error al eliminar la integracion";
+            ToastService.Error("Error al eliminar");
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task ToggleConnectMenu()
+    {
+        if (showConnectMenu)
+        {
+            showConnectMenu = false;
+            return;
+        }
+
+        mlError = null;
+        try
+        {
+            var response = await Api.GetMeliAuthUrlAsync();
+            if (response is not null && !string.IsNullOrEmpty(response.AuthUrl))
+            {
+                meliAuthUrl = response.AuthUrl;
+                showConnectMenu = true;
+                urlCopied = false;
+            }
+            else
+            {
+                ToastService.Error("No se pudo obtener la URL de autorizacion. Verifica la configuracion.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error al obtener URL: " + ex.Message);
+        }
+    }
+
+    private async Task OpenInBrowser()
+    {
+        showConnectMenu = false;
+        waitingForCode = true;
+        authCode = "";
+        await JS.InvokeVoidAsync("open", meliAuthUrl, "_blank");
+    }
+
+    private async Task CopyAuthUrl()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", meliAuthUrl);
+            urlCopied = true;
+            waitingForCode = true;
+            showConnectMenu = false;
+            ToastService.Success("URL copiada al portapapeles");
+        }
+        catch
+        {
+            ToastService.Error("No se pudo copiar la URL");
+        }
+    }
+
+    private void CancelConnect()
+    {
+        waitingForCode = false;
+        authCode = "";
+        showConnectMenu = false;
+    }
+
+    private async Task SubmitCode()
+    {
+        if (string.IsNullOrWhiteSpace(authCode))
+        {
+            ToastService.Warning("Pega el codigo de autorizacion");
+            return;
+        }
+
+        connecting = true;
+
+        try
+        {
+            var account = await Api.MeliCallbackAsync(authCode.Trim());
+            if (account is not null)
+            {
+                ToastService.Success($"Cuenta {account.Nickname} conectada exitosamente");
+                waitingForCode = false;
+                authCode = "";
+                await LoadAccounts();
+            }
+            else
+            {
+                ToastService.Error("No se pudo conectar. Verifica el codigo e intenta de nuevo.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error al conectar: " + ex.Message);
+        }
+        finally
+        {
+            connecting = false;
+        }
+    }
+
+    private void RemoveAccount(int id)
+    {
+        accountToDelete = id;
+        showDeleteConfirm = true;
+    }
+
+    private async Task ConfirmRemoveAccount()
+    {
+        showDeleteConfirm = false;
+
+        try
+        {
+            var deleted = await Api.DeleteMeliAccountAsync(accountToDelete);
+            if (deleted)
+            {
+                ToastService.Success("Cuenta desconectada");
+                await LoadAccounts();
+            }
+        }
+        catch
+        {
+            ToastService.Error("Error al quitar la cuenta");
+        }
+    }
+}
