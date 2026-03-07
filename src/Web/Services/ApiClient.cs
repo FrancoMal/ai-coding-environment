@@ -173,6 +173,11 @@ public class ApiClient
         return await PostAsync<MeliItemSyncResult>("/api/meli/items/sync", new { });
     }
 
+    public async Task<MeliItemDto?> UpdateMeliItemAsync(string meliItemId, UpdateMeliItemRequest request)
+    {
+        return await PutAsync<MeliItemDto>($"/api/meli/items/{meliItemId}", request);
+    }
+
     // --- MercadoLibre Order Detail ---
     public async Task<MeliOrderDetailResponse?> GetMeliOrderDetailAsync(long meliOrderId)
     {

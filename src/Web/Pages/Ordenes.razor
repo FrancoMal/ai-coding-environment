@@ -3,14 +3,9 @@
 @inject ApiClient Api
 @inject ToastService ToastService
 
-<div class="view-header">
-    <h2>Ordenes de MercadoLibre</h2>
-    <p class="view-subtitle">Ventas sincronizadas desde MercadoLibre</p>
-</div>
-
 <div class="card">
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-        <h3>Ordenes (@totalOrders)</h3>
+        <h3>Ordenes de MercadoLibre (@totalOrders)</h3>
         <button class="btn btn-primary" @onclick="SyncOrders" disabled="@isSyncing">
             @(isSyncing ? "Sincronizando..." : "Sincronizar")
         </button>

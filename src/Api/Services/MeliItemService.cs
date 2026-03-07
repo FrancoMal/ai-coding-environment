@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using Api.Data;
 using Api.DTOs;
@@ -46,6 +47,65 @@ public class MeliItemService
             .ToListAsync();
 
         return new MeliItemsResponse(items, total);
+    }
+
+    public async Task<MeliItemDto> UpdateItemAsync(string meliItemId, UpdateMeliItemRequest request)
+    {
+        var item = await _db.MeliItems
+            .Include(i => i.MeliAccount)
+            .FirstOrDefaultAsync(i => i.MeliItemId == meliItemId);
+
+        if (item is null)
+            throw new Exception($"Item {meliItemId} no encontrado");
+
+        if (item.MeliAccount is null)
+            throw new Exception($"Cuenta asociada no encontrada para {meliItemId}");
+
+        var token = await _accountService.GetValidTokenAsync(item.MeliAccount);
+        if (token is null)
+            throw new Exception("Token expirado. Reconecta la cuenta de MercadoLibre.");
+
+        // Build payload with only changed fields
+        var payload = new Dictionary<string, object>();
+        if (request.Title is not null) payload["title"] = request.Title;
+        if (request.Price.HasValue) payload["price"] = request.Price.Value;
+        if (request.AvailableQuantity.HasValue) payload["available_quantity"] = request.AvailableQuantity.Value;
+        if (request.Status is not null) payload["status"] = request.Status;
+
+        if (payload.Count > 0)
+        {
+            var http = _httpFactory.CreateClient();
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var response = await http.PutAsync($"https://api.mercadolibre.com/items/{meliItemId}", content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Error de MercadoLibre ({response.StatusCode}): {errorBody}");
+            }
+
+            // Update local DB only after MeLi API success
+            if (request.Title is not null) item.Title = request.Title;
+            if (request.Price.HasValue) item.Price = request.Price.Value;
+            if (request.AvailableQuantity.HasValue) item.AvailableQuantity = request.AvailableQuantity.Value;
+            if (request.Status is not null) item.Status = request.Status;
+            item.UpdatedAt = DateTime.UtcNow;
+            item.LastUpdated = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+        }
+
+        var nickname = item.MeliAccount?.Nickname ?? "Desconocida";
+        return new MeliItemDto(
+            item.Id, item.MeliItemId, item.MeliAccountId, nickname,
+            item.Title, item.CategoryId, item.Price, item.CurrencyId,
+            item.AvailableQuantity, item.SoldQuantity, item.Status,
+            item.Condition, item.ListingTypeId, item.Thumbnail, item.Permalink,
+            item.Sku, item.UserProductId, item.FamilyId, item.FamilyName,
+            item.DateCreated, item.LastUpdated);
     }
 
     public async Task<MeliItemSyncResult> SyncItemsAsync()

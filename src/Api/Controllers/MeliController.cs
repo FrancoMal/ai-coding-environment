@@ -158,4 +158,18 @@ public class MeliController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    [HttpPut("items/{meliItemId}")]
+    public async Task<IActionResult> UpdateItem(string meliItemId, [FromBody] UpdateMeliItemRequest request)
+    {
+        try
+        {
+            var result = await _itemService.UpdateItemAsync(meliItemId, request);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }

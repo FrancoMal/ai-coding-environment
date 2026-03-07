@@ -125,3 +125,5 @@ public record MeliItemDto(
 public record MeliItemsResponse(List<MeliItemDto> Items, int Total);
 
 public record MeliItemSyncResult(int TotalSynced, int TotalErrors, List<string> Errors);
+
+public record UpdateMeliItemRequest(string? Title, decimal? Price, int? AvailableQuantity, string? Status);

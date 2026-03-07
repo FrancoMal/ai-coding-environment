@@ -1122,7 +1122,8 @@ button {
    DATA TABLE
    ============================================================ */
 .table-responsive {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: calc(100vh - 280px);
 }
 
 .data-table {
@@ -1141,6 +1142,11 @@ button {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .data-table tbody td {

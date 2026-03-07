@@ -3,14 +3,9 @@
 @inject ApiClient Api
 @inject ToastService ToastService
 
-<div class="view-header">
-    <h2>Publicaciones de MercadoLibre</h2>
-    <p class="view-subtitle">Items publicados en tus cuentas de MercadoLibre</p>
-</div>
-
 <div class="card">
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-        <h3>Publicaciones (@totalItems)</h3>
+        <h3>Publicaciones de MercadoLibre (@totalItems)</h3>
         <button class="btn btn-primary" @onclick="SyncItems" disabled="@isSyncing">
             @(isSyncing ? "Sincronizando..." : "Sincronizar")
         </button>
@@ -200,7 +195,7 @@
                         {
                             @foreach (var item in GetFilteredAndSortedItems())
                             {
-                                <tr>
+                                <tr class="clickable-row" @onclick="() => OpenItemModal(item)">
                                     <td style="text-align: center;">
                                         @if (!string.IsNullOrEmpty(item.Thumbnail))
                                         {
@@ -246,7 +241,7 @@
                                 </tr>
                                 @foreach (var item in family.Items)
                                 {
-                                    <tr class="group-item-row">
+                                    <tr class="group-item-row clickable-row" @onclick="() => OpenItemModal(item)">
                                         <td style="text-align: center;">
                                             @if (!string.IsNullOrEmpty(item.Thumbnail))
                                             {
@@ -295,7 +290,7 @@
                                     </tr>
                                     @foreach (var item in product.Items)
                                     {
-                                        <tr class="group-item-row">
+                                        <tr class="group-item-row clickable-row" @onclick="() => OpenItemModal(item)">
                                             <td style="text-align: center;">
                                                 @if (!string.IsNullOrEmpty(item.Thumbnail))
                                                 {
@@ -332,7 +327,7 @@
                                 else
                                 {
                                     var item = product.Items[0];
-                                    <tr>
+                                    <tr class="clickable-row" @onclick="() => OpenItemModal(item)">
                                         <td style="text-align: center;">
                                             @if (!string.IsNullOrEmpty(item.Thumbnail))
                                             {
@@ -377,6 +372,113 @@
 @if (activeFilterColumn is not null)
 {
     <div class="filter-overlay" @onclick="CloseAllDropdowns"></div>
+}
+
+@if (showItemModal && selectedItem is not null)
+{
+    <div class="modal-overlay" @onclick="CloseItemModal">
+        <div class="modal-content modal-item-detail" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: whitesmoke;">
+                <h3 style="margin:0; font-size:1rem;">Detalle de Publicacion</h3>
+                <button class="modal-close" @onclick="CloseItemModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Header: thumbnail + meta -->
+                <div class="item-detail-header">
+                    <div class="item-detail-thumb">
+                        @if (!string.IsNullOrEmpty(selectedItem.Thumbnail))
+                        {
+                            <img src="@selectedItem.Thumbnail" alt="" />
+                        }
+                        else
+                        {
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="#9ca3af"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                        }
+                    </div>
+                    <div class="item-detail-meta">
+                        <span class="item-detail-meli-id">@selectedItem.MeliItemId</span>
+                        @if (!string.IsNullOrEmpty(selectedItem.Permalink))
+                        {
+                            <a href="@selectedItem.Permalink" target="_blank" class="item-detail-link">Ver en MercadoLibre ↗</a>
+                        }
+                        <span class="status-badge @GetStatusClass(selectedItem.Status)" style="width: fit-content;">@GetStatusLabel(selectedItem.Status)</span>
+                        <span style="font-size: 0.8rem; color: #6b7280;">Cuenta: @selectedItem.AccountNickname</span>
+                    </div>
+                </div>
+
+                <!-- Read-only info -->
+                <div class="detail-section">
+                    <h4>Informacion</h4>
+                    <div class="detail-info-grid">
+                        <div class="detail-info-item">
+                            <span class="detail-label">SKU</span>
+                            <span class="detail-value">@(selectedItem.Sku ?? "-")</span>
+                        </div>
+                        <div class="detail-info-item">
+                            <span class="detail-label">Vendidos</span>
+                            <span class="detail-value">@selectedItem.SoldQuantity</span>
+                        </div>
+                        <div class="detail-info-item">
+                            <span class="detail-label">Condicion</span>
+                            <span class="detail-value">@(GetConditionLabel(selectedItem.Condition))</span>
+                        </div>
+                        <div class="detail-info-item">
+                            <span class="detail-label">Tipo publicacion</span>
+                            <span class="detail-value">@GetListingTypeLabel(selectedItem.ListingTypeId)</span>
+                        </div>
+                        <div class="detail-info-item">
+                            <span class="detail-label">Categoria</span>
+                            <span class="detail-value">@(selectedItem.CategoryId ?? "-")</span>
+                        </div>
+                        <div class="detail-info-item">
+                            <span class="detail-label">Familia</span>
+                            <span class="detail-value">@(selectedItem.FamilyName ?? "-")</span>
+                        </div>
+                        <div class="detail-info-item">
+                            <span class="detail-label">Creada</span>
+                            <span class="detail-value">@(selectedItem.DateCreated?.ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
+                        </div>
+                        <div class="detail-info-item">
+                            <span class="detail-label">Ultima actualizacion</span>
+                            <span class="detail-value">@(selectedItem.LastUpdated?.ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Editable fields -->
+                <div class="detail-section">
+                    <h4>Editar</h4>
+                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                        <label class="form-label">Titulo</label>
+                        <input type="text" class="form-input" @bind="editTitle" />
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Precio (@selectedItem.CurrencyId)</label>
+                            <input type="number" class="form-input" @bind="editPrice" step="0.01" min="0" />
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Stock</label>
+                            <input type="number" class="form-input" @bind="editStock" min="0" />
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Estado</label>
+                        <div class="status-toggle">
+                            <button class="status-toggle-btn @(editStatus == "active" ? "active-btn" : "")" @onclick='() => editStatus = "active"'>Activa</button>
+                            <button class="status-toggle-btn @(editStatus == "paused" ? "paused-btn" : "")" @onclick='() => editStatus = "paused"'>Pausada</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseItemModal">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SaveItem" disabled="@isSaving">
+                    @(isSaving ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </div>
+    </div>
 }
 
 <style>
@@ -610,6 +712,120 @@
     .status-paused { background: #fffbeb; color: #d97706; }
     .status-closed { background: #f3f4f6; color: #6b7280; }
     .status-review { background: #eff6ff; color: #3b82f6; }
+
+    /* Clickable rows */
+    .clickable-row { cursor: pointer; }
+    .clickable-row:hover { background: #f5f3ff !important; }
+
+    /* Item detail modal */
+    .modal-item-detail {
+        max-width: 600px;
+        width: 95%;
+    }
+    .item-detail-header {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    .item-detail-thumb {
+        width: 100px;
+        height: 100px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        overflow: hidden;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f9fafb;
+    }
+    .item-detail-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .item-detail-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        justify-content: center;
+    }
+    .item-detail-meli-id {
+        font-size: 0.75rem;
+        color: #9ca3af;
+        font-family: monospace;
+    }
+    .item-detail-link {
+        font-size: 0.8rem;
+        color: #4f46e5;
+        text-decoration: none;
+    }
+    .item-detail-link:hover {
+        text-decoration: underline;
+    }
+
+    /* Detail sections */
+    .detail-section {
+        margin-bottom: 1rem;
+    }
+    .detail-section h4 {
+        font-size: 0.85rem;
+        color: #374151;
+        margin: 0 0 0.5rem 0;
+        padding-bottom: 0.35rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .detail-info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+    }
+    .detail-info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+    }
+    .detail-label {
+        font-size: 0.7rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .detail-value {
+        font-size: 0.85rem;
+        color: #1f2937;
+    }
+
+    /* Status toggle */
+    .status-toggle {
+        display: flex;
+        gap: 0.5rem;
+    }
+    .status-toggle-btn {
+        flex: 1;
+        padding: 0.5rem 1rem;
+        border: 2px solid #d1d5db;
+        border-radius: 8px;
+        background: white;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: #6b7280;
+        transition: all 0.15s;
+    }
+    .status-toggle-btn:hover {
+        border-color: #9ca3af;
+    }
+    .status-toggle-btn.active-btn {
+        border-color: #059669;
+        background: #ecfdf5;
+        color: #059669;
+    }
+    .status-toggle-btn.paused-btn {
+        border-color: #d97706;
+        background: #fffbeb;
+        color: #d97706;
+    }
 </style>
 
 @code {
@@ -884,6 +1100,105 @@
 
     private string Truncate(string text, int maxLength) =>
         text.Length <= maxLength ? text : text[..maxLength] + "...";
+
+    // --- Item detail modal ---
+    private MeliItemDto? selectedItem;
+    private bool showItemModal;
+    private bool isSaving;
+    private string editTitle = "";
+    private decimal editPrice;
+    private int editStock;
+    private string editStatus = "";
+
+    private void OpenItemModal(MeliItemDto item)
+    {
+        selectedItem = item;
+        editTitle = item.Title;
+        editPrice = item.Price;
+        editStock = item.AvailableQuantity;
+        editStatus = item.Status;
+        showItemModal = true;
+    }
+
+    private void CloseItemModal()
+    {
+        showItemModal = false;
+        selectedItem = null;
+    }
+
+    private async Task SaveItem()
+    {
+        if (selectedItem is null) return;
+
+        isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            // Build request with only changed fields
+            var request = new UpdateMeliItemRequest();
+            bool hasChanges = false;
+
+            if (editTitle != selectedItem.Title)
+            {
+                request.Title = editTitle;
+                hasChanges = true;
+            }
+            if (editPrice != selectedItem.Price)
+            {
+                request.Price = editPrice;
+                hasChanges = true;
+            }
+            if (editStock != selectedItem.AvailableQuantity)
+            {
+                request.AvailableQuantity = editStock;
+                hasChanges = true;
+            }
+            if (editStatus != selectedItem.Status)
+            {
+                request.Status = editStatus;
+                hasChanges = true;
+            }
+
+            if (!hasChanges)
+            {
+                ToastService.Info("No hay cambios para guardar");
+                isSaving = false;
+                return;
+            }
+
+            var updated = await Api.UpdateMeliItemAsync(selectedItem.MeliItemId, request);
+            if (updated is not null && items is not null)
+            {
+                // Replace item in local list
+                var idx = items.FindIndex(i => i.MeliItemId == selectedItem.MeliItemId);
+                if (idx >= 0)
+                    items[idx] = updated;
+
+                selectedItem = updated;
+                editTitle = updated.Title;
+                editPrice = updated.Price;
+                editStock = updated.AvailableQuantity;
+                editStatus = updated.Status;
+
+                ToastService.Success("Publicacion actualizada");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error al guardar: " + ex.Message);
+        }
+
+        isSaving = false;
+    }
+
+    private string GetConditionLabel(string? condition) => condition switch
+    {
+        "new" => "Nuevo",
+        "used" => "Usado",
+        "not_specified" => "No especificado",
+        _ => condition ?? "-"
+    };
 
     // --- Group classes ---
     private class FamilyGroup

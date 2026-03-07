@@ -37,3 +37,11 @@ public class MeliItemSyncResult
     public int TotalErrors { get; set; }
     public List<string> Errors { get; set; } = new();
 }
+
+public class UpdateMeliItemRequest
+{
+    public string? Title { get; set; }
+    public decimal? Price { get; set; }
+    public int? AvailableQuantity { get; set; }
+    public string? Status { get; set; }
+}
