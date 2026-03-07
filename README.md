@@ -7,8 +7,7 @@ Un template completo para crear ambientes de desarrollo con Docker. Incluye dash
 - **Dashboard web** con login y gestion de usuarios (Blazor WebAssembly)
 - **API REST** con autenticacion JWT (.NET 8)
 - **Base de datos** SQL Server Express
-- **Terminal web** integrada (Ubuntu con Node.js, Python, Git, FFmpeg)
-- **Herramientas AI** opcionales: Claude Code, Codex CLI, Gemini CLI
+- **Workspace** con herramientas AI: Claude Code, OpenCode, Codex CLI, Gemini CLI
 - **Nginx** como reverse proxy
 - **100% Docker** - un solo comando para levantar todo
 
@@ -21,7 +20,7 @@ Un template completo para crear ambientes de desarrollo con Docker. Incluye dash
 | Frontend | Blazor WebAssembly (.NET 8) + CSS |
 | Servidor web | Nginx |
 | Workspace | Ubuntu 22.04 + Node.js 20 + Python 3 |
-| Terminal web | ttyd |
+| Agentes AI | Claude Code, OpenCode, Codex CLI, Gemini CLI |
 | Contenedores | Docker + Docker Compose |
 
 ## Instalacion
@@ -55,24 +54,30 @@ Esto arranca automaticamente:
 - Base de datos SQL Server
 - Backend API (.NET 8)
 - Frontend Blazor + Nginx
-- Workspace con terminal web
+- Workspace con herramientas AI (se instalan en segundo plano la primera vez)
 
 ### Paso 4 - Abrir en el navegador
 
 | Que | Direccion |
 |-----|-----------|
 | Dashboard | http://localhost:3000 |
-| Terminal web | http://localhost:7681 |
 
 **Login:** admin / admin123
 
-### Paso 5 (Opcional) - Instalar herramientas AI
+### Paso 5 (Opcional) - Usar el workspace
 
 ```bash
-docker exec -it aicoding-workspace install-ai-tools
+docker exec -it aicoding-workspace bash
 ```
 
-Instala Claude Code, Codex CLI y Gemini CLI dentro del workspace. Se hace una sola vez.
+Dentro del workspace tenes disponible:
+- **Claude Code** - `claude` (necesita ANTHROPIC_API_KEY)
+- **OpenCode** - `opencode` (necesita OPENAI_API_KEY)
+- **Codex CLI** - `codex` (necesita OPENAI_API_KEY)
+- **Gemini CLI** - `gemini` (necesita GEMINI_API_KEY)
+- **Node.js**, **Python**, **Git**, **Docker CLI**
+
+Las herramientas AI se instalan automaticamente la primera vez que arranca el container. Si necesitas reinstalarlas: `install-ai-tools`
 
 ## Estructura del proyecto
 
@@ -80,7 +85,8 @@ Instala Claude Code, Codex CLI y Gemini CLI dentro del workspace. Se hace una so
 ai-coding-environment/
 ├── docker-compose.yml          # Levanta todo (DB, API, frontend, workspace)
 ├── .env.example                # Variables de entorno
-├── install-ai-tools.sh         # Script para instalar herramientas AI
+├── install-ai-tools.sh         # Script de instalacion de herramientas AI
+├── entrypoint.sh               # Script de inicio del workspace
 ├── Dockerfile.workspace        # Container de trabajo (Ubuntu + herramientas)
 ├── src/Api/                    # Backend .NET 8
 │   ├── Controllers/            # Endpoints de la API
@@ -110,20 +116,19 @@ ai-coding-environment/
 | sqlserver | Base de datos SQL Server Express | 1433 (interno) |
 | api | Backend .NET 8 con autenticacion JWT | 80 (interno) |
 | web | Blazor WASM + Nginx | 3000 |
-| workspace | Ubuntu + terminal web (ttyd) | 7681 |
+| workspace | Ubuntu + herramientas AI | - |
 
 ## Como se conectan
 
 ```
-Browser
-  |
-  |-- localhost:3000 ──> Nginx
-  |                       |-- /          -> Blazor WASM (frontend)
-  |                       |-- /api/      -> Backend .NET
-  |                       |-- /swagger   -> Documentacion API
-  |                       '-- /terminal  -> Terminal web
-  |
-  '-- localhost:7681 ──> Terminal web (directo)
+Browser -> localhost:3000 -> Nginx
+                              |-- /          -> Frontend (Blazor WASM)
+                              |-- /api/      -> Backend (.NET 8)
+                              '-- /swagger   -> Documentacion API
+
+Workspace (docker exec -it aicoding-workspace bash):
+  Claude Code, OpenCode, Codex CLI, Gemini CLI
+  Node.js v20, Python 3, Git, Docker CLI
 ```
 
 ## Credenciales por defecto
@@ -137,7 +142,7 @@ Browser
 
 ## Para agentes de IA
 
-Este proyecto incluye `CLAUDE.md` (tambien llamado AGENTS.md) con instrucciones detalladas para que cualquier agente de IA (Claude Code, Codex, Gemini, etc.) pueda trabajar en el automaticamente.
+Este proyecto incluye `CLAUDE.md` con instrucciones detalladas para que cualquier agente de IA (Claude Code, OpenCode, Codex, Gemini, etc.) pueda trabajar en el automaticamente.
 
 ## Expansion
 

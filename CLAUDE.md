@@ -149,23 +149,24 @@ Un unico `docker-compose.yml` levanta todos los servicios:
 | sqlserver-init | Ejecuta init.sql para crear tablas (corre una vez y termina) | - |
 | api | Backend .NET 8 con autenticacion JWT | 80 (interno) |
 | web | Blazor WASM + Nginx - sirve el frontend y proxea la API | 3000 |
-| workspace | Ubuntu con Node.js, Python, Git, etc. Terminal web con ttyd | 7681 |
+| workspace | Ubuntu con Node.js, Python, Git y herramientas AI | - |
 
 ### Como se conectan
 
 ```
 Usuario (browser)
     |
-    |-- localhost:3000   -> Dashboard (Blazor + API)
-    |-- localhost:7681   -> Terminal web del workspace
-    |
-    v
+    '-- localhost:3000   -> Dashboard (Blazor + API)
+
   Nginx (:3000 -> :80 interno)
     |-- /            -> Blazor WASM (archivos compilados en src/Web/)
     |-- /_framework/ -> Runtime de Blazor (DLLs, WASM)
     |-- /api/        -> Backend .NET (api:80)
-    |-- /swagger     -> Documentacion de la API
-    '-- /terminal    -> Terminal web del workspace (workspace:7681)
+    '-- /swagger     -> Documentacion de la API
+
+  Workspace (acceso por docker exec):
+    - Claude Code, OpenCode, Codex CLI, Gemini CLI
+    - Node.js, Python, Git, Docker CLI
 ```
 
 ### Tecnologias
@@ -175,8 +176,7 @@ Usuario (browser)
 - **Frontend**: Blazor WebAssembly (.NET 8) + CSS
 - **Servidor web**: Nginx
 - **Workspace**: Ubuntu 22.04, Node.js 20, Python 3, Git, FFmpeg, Docker CLI
-- **Agentes AI**: Claude Code, Codex CLI (OpenAI), Gemini CLI (Google) — se instalan con `install-ai-tools`
-- **Terminal web**: ttyd
+- **Agentes AI**: Claude Code, OpenCode, Codex CLI (OpenAI), Gemini CLI (Google) — se instalan automaticamente al iniciar
 - **Autenticacion**: JWT (JSON Web Tokens)
 - **Contenedores**: Docker + Docker Compose
 
@@ -251,10 +251,11 @@ docker compose up --build -d
 
 # 4. Abrir en el browser
 # Dashboard: http://localhost:3000
-# Terminal:  http://localhost:7681
 
-# 5. (Opcional) Instalar herramientas AI en el workspace
-docker exec -it aicoding-workspace install-ai-tools
+# 5. (Opcional) Entrar al workspace para usar las herramientas AI
+docker exec -it aicoding-workspace bash
+# Las herramientas AI (Claude Code, OpenCode, Codex, Gemini) se instalan
+# automaticamente la primera vez que arranca el container.
 ```
 
 ---

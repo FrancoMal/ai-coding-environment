@@ -50,49 +50,14 @@ RUN useradd -m -s /bin/bash developer \
     && mkdir -p /home/developer/workspace \
     && chown -R developer:developer /home/developer
 
-# Create a welcome script
-RUN echo '#!/bin/bash\n\
-echo ""\n\
-echo "  ===================================="\n\
-echo "  Welcome to AI Coding Environment"\n\
-echo "  ===================================="\n\
-echo ""\n\
-echo "  Herramientas disponibles:"\n\
-echo "    - git          $(git --version 2>/dev/null | cut -d\" \" -f3)"\n\
-echo "    - node         $(node --version 2>/dev/null)"\n\
-echo "    - npm          $(npm --version 2>/dev/null)"\n\
-echo "    - python3      $(python3 --version 2>/dev/null | cut -d\" \" -f2)"\n\
-echo "    - docker       $(docker --version 2>/dev/null | cut -d\" \" -f3 | tr -d \",\")"\n\
-echo "    - ffmpeg       $(ffmpeg -version 2>/dev/null | head -1 | cut -d\" \" -f3)"\n\
-echo ""\n\
-echo "  Agentes AI:"\n\
-if [ -f "$HOME/.ai-tools-installed" ]; then\n\
-echo "    - claude       (Claude Code - Anthropic)"\n\
-echo "    - codex        (Codex CLI - OpenAI)"\n\
-echo "    - gemini       (Gemini CLI - Google)"\n\
-else\n\
-echo "    No instalados. Ejecuta: install-ai-tools"\n\
-fi\n\
-echo ""\n\
-echo "  Servicios: DB + API + Frontend ya estan corriendo"\n\
-echo "  Dashboard: http://localhost:3000"\n\
-echo "  Para instalar herramientas AI: install-ai-tools"\n\
-echo ""\n\
-echo "  Directorio de trabajo: ~/workspace"\n\
-echo "  ===================================="\n\
-echo ""\n\
-' > /home/developer/.welcome.sh \
-    && chmod +x /home/developer/.welcome.sh \
-    && echo 'source ~/.welcome.sh' >> /home/developer/.bashrc
-
-# Script to install AI tools (runs on first login or manually)
+# Copy scripts
 COPY install-ai-tools.sh /usr/local/bin/install-ai-tools
-RUN chmod +x /usr/local/bin/install-ai-tools
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/install-ai-tools /usr/local/bin/entrypoint.sh
 
 USER developer
 WORKDIR /home/developer/workspace
 
 EXPOSE 7681
 
-# Start ttyd with bash
-CMD ["ttyd", "--writable", "--port", "7681", "--base-path", "/terminal", "bash", "--login"]
+ENTRYPOINT ["entrypoint.sh"]
