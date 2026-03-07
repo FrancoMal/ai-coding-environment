@@ -38,12 +38,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install AI coding tools
-RUN npm install -g @anthropic-ai/claude-code 2>/dev/null || echo "Claude Code install failed" \
-    && npm install -g opencode-ai 2>/dev/null || echo "OpenCode install failed" \
-    && npm install -g @openai/codex 2>/dev/null || echo "Codex CLI install failed" \
-    && npm install -g @google/gemini-cli 2>/dev/null || echo "Gemini CLI install failed"
-
 # Install ttyd (web terminal)
 RUN wget -q https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 -O /usr/local/bin/ttyd \
     && chmod +x /usr/local/bin/ttyd
@@ -72,14 +66,17 @@ echo "    - docker       $(docker --version 2>/dev/null | cut -d\" \" -f3 | tr -
 echo "    - ffmpeg       $(ffmpeg -version 2>/dev/null | head -1 | cut -d\" \" -f3)"\n\
 echo ""\n\
 echo "  Agentes AI:"\n\
+if [ -f "$HOME/.ai-tools-installed" ]; then\n\
 echo "    - claude       (Claude Code - Anthropic)"\n\
 echo "    - codex        (Codex CLI - OpenAI)"\n\
 echo "    - gemini       (Gemini CLI - Google)"\n\
-echo "    - opencode     (OpenCode AI)"\n\
+else\n\
+echo "    No instalados. Ejecuta: install-ai-tools"\n\
+fi\n\
 echo ""\n\
-echo "  Para levantar los servicios:"\n\
-echo "    cd ~/workspace"\n\
-echo "    docker compose -f docker-compose.services.yml up -d"\n\
+echo "  Servicios: DB + API + Frontend ya estan corriendo"\n\
+echo "  Dashboard: http://localhost:3000"\n\
+echo "  Para instalar herramientas AI: install-ai-tools"\n\
 echo ""\n\
 echo "  Directorio de trabajo: ~/workspace"\n\
 echo "  ===================================="\n\
@@ -87,6 +84,10 @@ echo ""\n\
 ' > /home/developer/.welcome.sh \
     && chmod +x /home/developer/.welcome.sh \
     && echo 'source ~/.welcome.sh' >> /home/developer/.bashrc
+
+# Script to install AI tools (runs on first login or manually)
+COPY install-ai-tools.sh /usr/local/bin/install-ai-tools
+RUN chmod +x /usr/local/bin/install-ai-tools
 
 USER developer
 WORKDIR /home/developer/workspace

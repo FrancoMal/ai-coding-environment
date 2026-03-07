@@ -43,7 +43,7 @@ No acumules muchos cambios en un solo commit. Un commit por funcionalidad o arre
 No digas "listo, funciona" sin haber verificado. Siempre:
 - Si tocaste el backend: verifica que compila (`dotnet build`)
 - Si tocaste el frontend: recarga el browser y verifica visualmente
-- Si tocaste Docker: hace `docker-compose up --build -d` y verifica que los containers esten corriendo
+- Si tocaste Docker: hace `docker compose up --build -d` y verifica que los containers esten corriendo
 
 ### 3. No romper lo que ya funciona
 
@@ -78,9 +78,9 @@ Hace SOLO lo que el usuario pidio. No agregues cosas "por las dudas" o "porque s
 ```
 ai-coding-environment/
 |
-|-- docker-compose.yml              <- Levanta SOLO el workspace
-|-- docker-compose.services.yml     <- Servicios del proyecto (se corre desde dentro del workspace)
+|-- docker-compose.yml              <- Levanta TODO (DB, API, frontend, workspace)
 |-- .env.example                    <- Variables de entorno (copiar a .env)
+|-- install-ai-tools.sh             <- Script para instalar herramientas AI en el workspace
 |
 |-- src/Api/                  <- Backend (API REST)
 |   |-- Program.cs            <- Punto de entrada de la API
@@ -129,7 +129,7 @@ ai-coding-environment/
 |-- db/
 |   '-- init.sql              <- Script que crea las tablas iniciales
 |
-|-- Dockerfile.workspace      <- Como se construye el container de trabajo (Ubuntu + herramientas AI)
+|-- Dockerfile.workspace      <- Como se construye el container de trabajo (Ubuntu + herramientas)
 |
 |-- nginx/
 |   '-- nginx.conf            <- Configuracion del servidor web
@@ -139,33 +139,33 @@ ai-coding-environment/
 
 ### Servicios Docker
 
-El proyecto usa dos docker-compose separados:
+Todo se levanta con un solo comando: `docker compose up --build -d`
 
-**docker-compose.yml** (se levanta primero desde el host):
+Un unico `docker-compose.yml` levanta todos los servicios:
+
 | Servicio | Que hace | Puerto |
 |----------|----------|--------|
-| workspace | Ubuntu con herramientas AI y Docker CLI. Terminal web accesible en localhost:7681 | 7681 |
-
-**docker-compose.services.yml** (se levanta desde DENTRO del workspace):
-| Servicio | Que hace | Puerto |
-|----------|----------|--------|
-| sqlserver | Base de datos SQL Server Express | 1433 |
-| api | Backend .NET 8 con autenticacion JWT | interno |
-| web | Blazor WASM + Nginx - sirve el frontend y hace de intermediario | 8080 |
+| sqlserver | Base de datos SQL Server Express | 1433 (interno) |
+| sqlserver-init | Ejecuta init.sql para crear tablas (corre una vez y termina) | - |
+| api | Backend .NET 8 con autenticacion JWT | 80 (interno) |
+| web | Blazor WASM + Nginx - sirve el frontend y proxea la API | 3000 |
+| workspace | Ubuntu con Node.js, Python, Git, etc. Terminal web con ttyd | 7681 |
 
 ### Como se conectan
 
 ```
 Usuario (browser)
     |
-    |-- localhost:7681   -> Terminal web del workspace (directo)
+    |-- localhost:3000   -> Dashboard (Blazor + API)
+    |-- localhost:7681   -> Terminal web del workspace
     |
     v
-  Nginx (:8080)
+  Nginx (:3000 -> :80 interno)
     |-- /            -> Blazor WASM (archivos compilados en src/Web/)
     |-- /_framework/ -> Runtime de Blazor (DLLs, WASM)
     |-- /api/        -> Backend .NET (api:80)
-    '-- /terminal    -> Redirige a la terminal web del workspace
+    |-- /swagger     -> Documentacion de la API
+    '-- /terminal    -> Terminal web del workspace (workspace:7681)
 ```
 
 ### Tecnologias
@@ -175,7 +175,7 @@ Usuario (browser)
 - **Frontend**: Blazor WebAssembly (.NET 8) + CSS
 - **Servidor web**: Nginx
 - **Workspace**: Ubuntu 22.04, Node.js 20, Python 3, Git, FFmpeg, Docker CLI
-- **Agentes AI**: Claude Code, OpenCode, Codex CLI (OpenAI), Gemini CLI (Google)
+- **Agentes AI**: Claude Code, Codex CLI (OpenAI), Gemini CLI (Google) — se instalan con `install-ai-tools`
 - **Terminal web**: ttyd
 - **Autenticacion**: JWT (JSON Web Tokens)
 - **Contenedores**: Docker + Docker Compose
@@ -221,7 +221,7 @@ Buscar "Tu Marca" en estos archivos y reemplazar:
 ### Agregar un nuevo servicio Docker
 
 1. Crear una carpeta con su `Dockerfile`
-2. Agregarlo en `docker-compose.services.yml` dentro de `services:`
+2. Agregarlo en `docker-compose.yml` dentro de `services:`
 3. Si necesita ser accesible desde el browser, agregar la ruta en `nginx/nginx.conf`
 
 ---
@@ -246,18 +246,15 @@ cp .env.example .env
 #    OPENAI_API_KEY    -> Codex CLI
 #    GEMINI_API_KEY    -> Gemini CLI
 
-# 3. Levantar el workspace
+# 3. Levantar todo (DB + API + frontend + workspace)
 docker compose up --build -d
 
-# 4. Entrar al workspace
-docker exec -it aicoding-workspace bash
-
-# 5. Desde DENTRO del workspace, levantar los servicios
-docker compose -f docker-compose.services.yml up --build -d
-
-# 6. Abrir en el browser
-# Dashboard: http://localhost:8080
+# 4. Abrir en el browser
+# Dashboard: http://localhost:3000
 # Terminal:  http://localhost:7681
+
+# 5. (Opcional) Instalar herramientas AI en el workspace
+docker exec -it aicoding-workspace install-ai-tools
 ```
 
 ---

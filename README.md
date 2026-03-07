@@ -1,97 +1,155 @@
-# AI Coding Environment Dashboard
+# AI Coding Environment
 
-Un template completo para crear ambientes de desarrollo con Docker. Ideal para ofrecer como servicio o para tener tu propio entorno de coding configurado.
+Un template completo para crear ambientes de desarrollo con Docker. Incluye dashboard web, API, base de datos y un workspace con herramientas AI preconfiguradas.
 
-## ✨ Características
+## Que incluye
 
-- **Dashboard web** con login y gestión de usuarios
-- **API REST** con autenticación JWT (.NET 8)
+- **Dashboard web** con login y gestion de usuarios (Blazor WebAssembly)
+- **API REST** con autenticacion JWT (.NET 8)
 - **Base de datos** SQL Server Express
-- **Terminal web** integrada (Ubuntu con Claude Code, Node.js, Python, FFmpeg)
+- **Terminal web** integrada (Ubuntu con Node.js, Python, Git, FFmpeg)
+- **Herramientas AI** opcionales: Claude Code, Codex CLI, Gemini CLI
 - **Nginx** como reverse proxy
-- **100% Docker** - fácil de desplegar
+- **100% Docker** - un solo comando para levantar todo
 
-## 🛠️ Stack
+## Stack
 
-| Componente | Tecnología |
+| Componente | Tecnologia |
 |------------|------------|
 | Backend | .NET 8 + C# + Entity Framework Core |
 | Base de datos | SQL Server 2022 Express |
-| Frontend | HTML + CSS + JavaScript (vanilla) |
+| Frontend | Blazor WebAssembly (.NET 8) + CSS |
 | Servidor web | Nginx |
-| Workspace | Ubuntu 22.04 + Claude Code + Node.js 20 + Python 3 |
+| Workspace | Ubuntu 22.04 + Node.js 20 + Python 3 |
 | Terminal web | ttyd |
 | Contenedores | Docker + Docker Compose |
 
-## 🚀 Cómo usarlo
+## Instalacion
 
-### 1. Clonar el proyecto
+### Requisito previo
+
+Tener [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado y corriendo.
+
+### Paso 1 - Descargar el proyecto
 
 ```bash
 git clone https://github.com/FrancoMal/ai-coding-environment.git
 cd ai-coding-environment
 ```
 
-### 2. Configurar variables de entorno
+### Paso 2 - Configurar variables de entorno
 
 ```bash
 cp .env.example .env
 ```
 
-### 3. Levantar todo
+Si tenes API keys de los agentes AI, edita el archivo `.env` y pegalas ahi. Si no, dejalo vacio y todo funciona igual (solo que no vas a poder usar los agentes AI).
+
+### Paso 3 - Levantar todo
 
 ```bash
 docker compose up --build -d
 ```
 
-### 4. Acceder
+Esto arranca automaticamente:
+- Base de datos SQL Server
+- Backend API (.NET 8)
+- Frontend Blazor + Nginx
+- Workspace con terminal web
 
-- **Dashboard:** http://localhost:8080
-- **Usuario:** admin
-- **Contraseña:** admin123
+### Paso 4 - Abrir en el navegador
 
-## 📁 Estructura
+| Que | Direccion |
+|-----|-----------|
+| Dashboard | http://localhost:3000 |
+| Terminal web | http://localhost:7681 |
+
+**Login:** admin / admin123
+
+### Paso 5 (Opcional) - Instalar herramientas AI
+
+```bash
+docker exec -it aicoding-workspace install-ai-tools
+```
+
+Instala Claude Code, Codex CLI y Gemini CLI dentro del workspace. Se hace una sola vez.
+
+## Estructura del proyecto
 
 ```
 ai-coding-environment/
-├── docker-compose.yml     # Orquestación de servicios
-├── .env.example          # Variables de entorno
-├── src/Api/              # Backend .NET 8
-│   ├── Controllers/      # Endpoints API
-│   ├── Models/           # Modelos de datos
-│   ├── Services/         # Lógica de negocio
-│   └── Data/             # Entity Framework
-├── web/                  # Frontend
-│   ├── index.html        # Dashboard
-│   ├── login.html        # Login
-│   ├── css/              # Estilos
-│   └── js/               # JavaScript
-├── workspace/            # Container de desarrollo
-├── db/                  # Scripts de base de datos
-└── nginx/               # Configuración Nginx
+├── docker-compose.yml          # Levanta todo (DB, API, frontend, workspace)
+├── .env.example                # Variables de entorno
+├── install-ai-tools.sh         # Script para instalar herramientas AI
+├── Dockerfile.workspace        # Container de trabajo (Ubuntu + herramientas)
+├── src/Api/                    # Backend .NET 8
+│   ├── Controllers/            # Endpoints de la API
+│   ├── Models/                 # Modelos de datos
+│   ├── Services/               # Logica de negocio
+│   ├── Data/                   # Entity Framework (base de datos)
+│   ├── DTOs/                   # Objetos de transferencia
+│   └── Dockerfile              # Build del backend
+├── src/Web/                    # Frontend Blazor WebAssembly
+│   ├── Pages/                  # Paginas (Login, Dashboard, Config)
+│   ├── Layout/                 # Layouts (MainLayout, LoginLayout)
+│   ├── Shared/                 # Componentes reutilizables
+│   ├── Models/                 # Modelos del frontend
+│   ├── Services/               # Servicios (Auth, API, Toast)
+│   ├── wwwroot/                # Archivos estaticos (HTML, CSS)
+│   └── Dockerfile              # Build del frontend
+├── db/                         # Scripts de base de datos
+│   └── init.sql                # Creacion de tablas
+└── nginx/                      # Configuracion del servidor web
+    └── nginx.conf              # Reverse proxy + SPA routing
 ```
 
-## 🤖 Para agentes de IA
+## Servicios Docker
 
-Este proyecto incluye `AGENTS.md` con instrucciones detalladas para que cualquier agente de IA (Claude Code, OpenCode, etc.) pueda trabajar en él sin necesidad de explicación adicional.
+| Servicio | Que hace | Puerto |
+|----------|----------|--------|
+| sqlserver | Base de datos SQL Server Express | 1433 (interno) |
+| api | Backend .NET 8 con autenticacion JWT | 80 (interno) |
+| web | Blazor WASM + Nginx | 3000 |
+| workspace | Ubuntu + terminal web (ttyd) | 7681 |
 
-## 📝 Credenciales por defecto
+## Como se conectan
 
-| Servicio | Usuario | Contraseña |
+```
+Browser
+  |
+  |-- localhost:3000 ──> Nginx
+  |                       |-- /          -> Blazor WASM (frontend)
+  |                       |-- /api/      -> Backend .NET
+  |                       |-- /swagger   -> Documentacion API
+  |                       '-- /terminal  -> Terminal web
+  |
+  '-- localhost:7681 ──> Terminal web (directo)
+```
+
+## Credenciales por defecto
+
+| Servicio | Usuario | Contrasena |
 |----------|---------|------------|
 | Dashboard | admin | admin123 |
 | SQL Server | sa | YourStrong@Passw0rd |
 
-**⚠️ Cambiar contraseñas en producción**
+**Importante:** Cambiar las contrasenas en produccion.
 
-## 🌐 Expansión
+## Para agentes de IA
 
-El template está diseñado para ser expandido facilmente:
+Este proyecto incluye `CLAUDE.md` (tambien llamado AGENTS.md) con instrucciones detalladas para que cualquier agente de IA (Claude Code, Codex, Gemini, etc.) pueda trabajar en el automaticamente.
 
-- **Nueva página:** agregar en `web/js/dashboard.js`
-- **Nueva tabla:** crear modelo C# + agregar en `db/init.sql`
+## Expansion
+
+El template esta disenado para crecer facilmente:
+
+- **Nueva pagina:** crear `.razor` en `src/Web/Pages/` y agregar navegacion en `MainLayout.razor`
+- **Nueva tabla:** crear modelo en `src/Api/Models/` + agregar en `db/init.sql`
+- **Nuevo endpoint:** crear controller en `src/Api/Controllers/`
 - **Nuevo servicio Docker:** agregar en `docker-compose.yml`
 
-## 📄 Licencia
+Ver `CLAUDE.md` para instrucciones detalladas de cada tipo de expansion.
+
+## Licencia
 
 MIT
