@@ -78,9 +78,9 @@ Hace SOLO lo que el usuario pidio. No agregues cosas "por las dudas" o "porque s
 ```
 ai-coding-environment/
 |
-|-- docker-compose.yml              <- Levanta TODO (DB, API, frontend, workspace)
-|-- .env.example                    <- Variables de entorno (copiar a .env)
-|-- install-ai-tools.sh             <- Script para instalar herramientas AI en el workspace
+|-- docker-compose.yml          <- Levanta la app (DB + API + Frontend)
+|-- setup.sh                    <- Instalador: prepara la maquina y levanta todo
+|-- .env.example                <- Variables de entorno (API keys)
 |
 |-- src/Api/                  <- Backend (API REST)
 |   |-- Program.cs            <- Punto de entrada de la API
@@ -129,8 +129,6 @@ ai-coding-environment/
 |-- db/
 |   '-- init.sql              <- Script que crea las tablas iniciales
 |
-|-- Dockerfile.workspace      <- Como se construye el container de trabajo (Ubuntu + herramientas)
-|
 |-- nginx/
 |   '-- nginx.conf            <- Configuracion del servidor web
 |
@@ -139,9 +137,7 @@ ai-coding-environment/
 
 ### Servicios Docker
 
-Todo se levanta con un solo comando: `docker compose up --build -d`
-
-Un unico `docker-compose.yml` levanta todos los servicios:
+Todo se levanta con `docker compose up --build -d` (o con `./setup.sh` que hace todo automaticamente):
 
 | Servicio | Que hace | Puerto |
 |----------|----------|--------|
@@ -149,25 +145,23 @@ Un unico `docker-compose.yml` levanta todos los servicios:
 | sqlserver-init | Ejecuta init.sql para crear tablas (corre una vez y termina) | - |
 | api | Backend .NET 8 con autenticacion JWT | 80 (interno) |
 | web | Blazor WASM + Nginx - sirve el frontend y proxea la API | 3000 |
-| workspace | Ubuntu con Node.js, Python, Git y herramientas AI | - |
 
 ### Como se conectan
 
 ```
-Usuario (browser)
-    |
-    '-- localhost:3000   -> Dashboard (Blazor + API)
-
-  Nginx (:3000 -> :80 interno)
-    |-- /            -> Blazor WASM (archivos compilados en src/Web/)
-    |-- /_framework/ -> Runtime de Blazor (DLLs, WASM)
-    |-- /api/        -> Backend .NET (api:80)
-    '-- /swagger     -> Documentacion de la API
-
-  Workspace (acceso por docker exec):
-    - Claude Code, OpenCode, Codex CLI, Gemini CLI
-    - Node.js, Python, Git, Docker CLI
+Browser -> localhost:3000 -> Nginx
+                              |-- /            -> Blazor WASM (frontend)
+                              |-- /_framework/ -> Runtime de Blazor
+                              |-- /api/        -> Backend .NET (api:80)
+                              '-- /swagger     -> Documentacion de la API
 ```
+
+### Herramientas AI (se instalan en la maquina con setup.sh)
+
+- **Claude Code** - `claude` (necesita ANTHROPIC_API_KEY)
+- **OpenCode** - `opencode` (necesita OPENAI_API_KEY)
+- **Codex CLI** - `codex` (necesita OPENAI_API_KEY)
+- **Gemini CLI** - `gemini` (necesita GEMINI_API_KEY)
 
 ### Tecnologias
 
@@ -175,8 +169,7 @@ Usuario (browser)
 - **Base de datos**: SQL Server 2022 Express
 - **Frontend**: Blazor WebAssembly (.NET 8) + CSS
 - **Servidor web**: Nginx
-- **Workspace**: Ubuntu 22.04, Node.js 20, Python 3, Git, FFmpeg, Docker CLI
-- **Agentes AI**: Claude Code, OpenCode, Codex CLI (OpenAI), Gemini CLI (Google) — se instalan automaticamente al iniciar
+- **Agentes AI**: Claude Code, OpenCode, Codex CLI, Gemini CLI
 - **Autenticacion**: JWT (JSON Web Tokens)
 - **Contenedores**: Docker + Docker Compose
 
@@ -237,25 +230,27 @@ Buscar "Tu Marca" en estos archivos y reemplazar:
 
 ## Como levantar el proyecto
 
+### Opcion 1: Instalador automatico (recomendado)
+
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+Instala todo lo necesario (Node.js, Python, Docker, herramientas AI) y levanta el proyecto.
+
+### Opcion 2: Manual
+
 ```bash
 # 1. Copiar variables de entorno
 cp .env.example .env
 
 # 2. (Opcional) Poner tus API keys en .env
-#    ANTHROPIC_API_KEY -> Claude Code
-#    OPENAI_API_KEY    -> Codex CLI
-#    GEMINI_API_KEY    -> Gemini CLI
 
-# 3. Levantar todo (DB + API + frontend + workspace)
+# 3. Levantar la app
 docker compose up --build -d
 
-# 4. Abrir en el browser
-# Dashboard: http://localhost:3000
-
-# 5. (Opcional) Entrar al workspace para usar las herramientas AI
-docker exec -it aicoding-workspace bash
-# Las herramientas AI (Claude Code, OpenCode, Codex, Gemini) se instalan
-# automaticamente la primera vez que arranca el container.
+# 4. Abrir en el browser: http://localhost:3000
 ```
 
 ---

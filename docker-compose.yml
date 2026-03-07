@@ -66,25 +66,6 @@ services:
       - api
     restart: unless-stopped
 
-  # --- Workspace (terminal web + herramientas AI) ---
-  workspace:
-    build:
-      context: .
-      dockerfile: Dockerfile.workspace
-    container_name: aicoding-workspace
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - .:/home/developer/workspace
-    ports:
-      - "7681:7681"
-    networks:
-      - aicoding-net
-    restart: unless-stopped
 
 networks:
   aicoding-net:
