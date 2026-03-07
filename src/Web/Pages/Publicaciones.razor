@@ -377,7 +377,7 @@
 @if (showItemModal && selectedItem is not null)
 {
     <div class="modal-overlay" @onclick="CloseItemModal">
-        <div class="modal-content modal-item-detail" @onclick:stopPropagation="true">
+        <div class="modal-card modal-item-detail" @onclick:stopPropagation="true">
             <div class="modal-header" style="background: whitesmoke;">
                 <h3 style="margin:0; font-size:1rem;">Detalle de Publicacion</h3>
                 <button class="modal-close" @onclick="CloseItemModal">&times;</button>
