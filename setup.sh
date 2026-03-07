@@ -94,6 +94,19 @@ else
     fi
 fi
 
+# npm (viene con Node.js, pero verificamos por las dudas)
+if command -v npm &>/dev/null; then
+    skip "npm $(npm --version)"
+else
+    if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
+        install_apt npm
+        ok "npm $(npm --version) instalado"
+    elif [ "$OS" = "macos" ]; then
+        brew install npm
+        ok "npm $(npm --version) instalado"
+    fi
+fi
+
 # ===========================================================
 # 3. Python 3
 # ===========================================================
