@@ -175,7 +175,30 @@ public class ApiClient
 
     public async Task<MeliItemDto?> UpdateMeliItemAsync(string meliItemId, UpdateMeliItemRequest request)
     {
-        return await PutAsync<MeliItemDto>($"/api/meli/items/{meliItemId}", request);
+        await SetAuthHeaderAsync();
+        var response = await _http.PutAsJsonAsync($"/api/meli/items/{meliItemId}", request);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await _authService.LogoutAsync();
+            _navigation.NavigateTo("/login", forceLoad: true);
+            return default;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync();
+            try
+            {
+                var doc = System.Text.Json.JsonDocument.Parse(errorBody);
+                if (doc.RootElement.TryGetProperty("error", out var errorProp))
+                    throw new Exception(errorProp.GetString());
+            }
+            catch (System.Text.Json.JsonException) { }
+            throw new Exception($"Error del servidor ({response.StatusCode})");
+        }
+
+        return await response.Content.ReadFromJsonAsync<MeliItemDto>();
     }
 
     // --- MercadoLibre Order Detail ---
