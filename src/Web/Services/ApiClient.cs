@@ -201,6 +201,15 @@ public class ApiClient
         return await response.Content.ReadFromJsonAsync<MeliItemDto>();
     }
 
+    // --- Audit Logs ---
+    public async Task<AuditLogListResponse?> GetAuditLogsAsync(DateTime from, DateTime to, string? entityType = null, int page = 1)
+    {
+        var url = $"/api/audit-logs?from={from:yyyy-MM-ddTHH:mm:ss}&to={to:yyyy-MM-ddTHH:mm:ss}&page={page}";
+        if (!string.IsNullOrEmpty(entityType))
+            url += $"&entityType={entityType}";
+        return await GetAsync<AuditLogListResponse>(url);
+    }
+
     // --- MercadoLibre Order Detail ---
     public async Task<MeliOrderDetailResponse?> GetMeliOrderDetailAsync(long meliOrderId)
     {

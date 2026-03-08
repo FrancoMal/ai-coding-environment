@@ -190,6 +190,23 @@ BEGIN
 END
 GO
 
+-- AuditLogs table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='AuditLogs' AND xtype='U')
+BEGIN
+    CREATE TABLE AuditLogs (
+        Id INT PRIMARY KEY IDENTITY(1,1),
+        EntityType NVARCHAR(100) NOT NULL,
+        EntityId NVARCHAR(100) NOT NULL,
+        Action NVARCHAR(50) NOT NULL,
+        Changes NVARCHAR(MAX) NULL,
+        UserName NVARCHAR(100) NULL,
+        CreatedAt DATETIME2 DEFAULT GETDATE()
+    );
+    CREATE INDEX IX_AuditLogs_EntityType_EntityId ON AuditLogs (EntityType, EntityId);
+    CREATE INDEX IX_AuditLogs_CreatedAt ON AuditLogs (CreatedAt DESC);
+END
+GO
+
 -- Seed admin user (password will be set by API on startup)
 IF NOT EXISTS (SELECT * FROM Users WHERE Username = 'admin')
 BEGIN

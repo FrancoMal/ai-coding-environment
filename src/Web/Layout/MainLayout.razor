@@ -27,6 +27,11 @@
                  IsActive="@IsActive("/ordenes")" OnClick="@(() => NavigateTo("/ordenes"))" />
         <NavItem Href="/publicaciones" Label="Publicaciones" Icon="@SvgIcons.Tag"
                  IsActive="@IsActive("/publicaciones")" OnClick="@(() => NavigateTo("/publicaciones"))" />
+        @if (isAdmin)
+        {
+            <NavItem Href="/auditoria" Label="Auditoria" Icon="@SvgIcons.History"
+                     IsActive="@IsActive("/auditoria")" OnClick="@(() => NavigateTo("/auditoria"))" />
+        }
         <NavItem Href="/config" Label="Configuracion" Icon="@SvgIcons.Settings"
                  IsActive="@IsActive("/config")" OnClick="@(() => NavigateTo("/config"))" />
     </nav>

@@ -13,12 +13,14 @@ public class MeliItemService
     private readonly AppDbContext _db;
     private readonly IHttpClientFactory _httpFactory;
     private readonly MeliAccountService _accountService;
+    private readonly AuditLogService _auditLog;
 
-    public MeliItemService(AppDbContext db, IHttpClientFactory httpFactory, MeliAccountService accountService)
+    public MeliItemService(AppDbContext db, IHttpClientFactory httpFactory, MeliAccountService accountService, AuditLogService auditLog)
     {
         _db = db;
         _httpFactory = httpFactory;
         _accountService = accountService;
+        _auditLog = auditLog;
     }
 
     public async Task<MeliItemsResponse> GetItemsAsync(int? meliAccountId = null, string? status = null)
@@ -65,6 +67,12 @@ public class MeliItemService
         if (token is null)
             throw new Exception("Token expirado. Reconecta la cuenta de MercadoLibre.");
 
+        // Capture old values for audit
+        var oldTitle = item.Title;
+        var oldPrice = item.Price;
+        var oldStock = item.AvailableQuantity;
+        var oldStatus = item.Status;
+
         // Build payload with only changed fields
         var payload = new Dictionary<string, object>();
         if (request.Title is not null) payload["title"] = request.Title;
@@ -96,6 +104,23 @@ public class MeliItemService
             item.LastUpdated = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
+
+            // Audit log
+            var changes = new Dictionary<string, object>();
+            if (request.Title is not null && request.Title != oldTitle)
+                changes["Titulo"] = new { old = oldTitle, @new = request.Title };
+            if (request.Price.HasValue && request.Price.Value != oldPrice)
+                changes["Precio"] = new { old = oldPrice, @new = request.Price.Value };
+            if (request.AvailableQuantity.HasValue && request.AvailableQuantity.Value != oldStock)
+                changes["Stock"] = new { old = oldStock, @new = request.AvailableQuantity.Value };
+            if (request.Status is not null && request.Status != oldStatus)
+                changes["Estado"] = new { old = oldStatus, @new = request.Status };
+
+            if (changes.Count > 0)
+            {
+                var changesJson = JsonSerializer.Serialize(changes);
+                await _auditLog.LogAsync("MeliItem", meliItemId, "UPDATE", changesJson);
+            }
         }
 
         var nickname = item.MeliAccount?.Nickname ?? "Desconocida";
@@ -136,6 +161,10 @@ public class MeliItemService
                 totalErrors++;
             }
         }
+
+        // Audit log for sync
+        var syncInfo = $"Sincronizados {totalSynced} items, {totalErrors} errores";
+        await _auditLog.LogAsync("Sync", "items", "SYNC", syncInfo);
 
         return new MeliItemSyncResult(totalSynced, totalErrors, errors);
     }

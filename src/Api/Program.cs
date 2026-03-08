@@ -49,6 +49,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<MeliAccountService>();
 builder.Services.AddScoped<MeliOrderService>();
 builder.Services.AddScoped<MeliItemService>();
+builder.Services.AddScoped<AuditLogService>();
 
 // CORS
 builder.Services.AddCors(options =>

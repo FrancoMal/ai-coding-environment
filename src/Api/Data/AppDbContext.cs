@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<MeliAccount> MeliAccounts => Set<MeliAccount>();
     public DbSet<MeliOrder> MeliOrders => Set<MeliOrder>();
     public DbSet<MeliItem> MeliItems => Set<MeliItem>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -66,6 +67,12 @@ public class AppDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(i => i.MeliAccountId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.HasIndex(a => new { a.EntityType, a.EntityId });
+            entity.HasIndex(a => a.CreatedAt);
         });
     }
 }
