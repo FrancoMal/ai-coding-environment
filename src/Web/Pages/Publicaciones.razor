@@ -933,6 +933,7 @@
     .status-paused { background: #fffbeb; color: #d97706; }
     .status-closed { background: #f3f4f6; color: #6b7280; }
     .status-review { background: #eff6ff; color: #3b82f6; }
+    .status-deleted { background: #fde8e8; color: #991b1b; }
 
     /* Clickable rows */
     .clickable-row { cursor: pointer; }
@@ -1836,6 +1837,7 @@
         "closed" => "status-closed",
         "under_review" => "status-review",
         "inactive" => "status-closed",
+        "deleted" => "status-deleted",
         _ => ""
     };
 
@@ -1846,6 +1848,7 @@
         "closed" => "Cerrada",
         "under_review" => "En revision",
         "inactive" => "Inactiva",
+        "deleted" => "Eliminada",
         _ => status
     };
 

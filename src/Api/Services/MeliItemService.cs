@@ -409,7 +409,32 @@ public class MeliItemService
             await _db.SaveChangesAsync();
         }
 
-        // Step 3: Sync promotional prices for active items
+        // Step 3: Marcar como "deleted" las publicaciones que ya no existen en MeLi
+        // Solo cuando se sincroniza sin filtro de estado (sync completa)
+        if (string.IsNullOrEmpty(statusFilter))
+        {
+            var localItemIds = await _db.MeliItems
+                .Where(i => i.MeliAccountId == account.Id && i.Status != "deleted")
+                .Select(i => i.MeliItemId)
+                .ToListAsync();
+
+            var meliIdSet = new HashSet<string>(allItemIds);
+            var deletedIds = localItemIds.Where(id => !meliIdSet.Contains(id)).ToList();
+
+            if (deletedIds.Any())
+            {
+                var itemsToMark = await _db.MeliItems
+                    .Where(i => i.MeliAccountId == account.Id && deletedIds.Contains(i.MeliItemId))
+                    .ToListAsync();
+
+                foreach (var item in itemsToMark)
+                    item.Status = "deleted";
+
+                await _db.SaveChangesAsync();
+            }
+        }
+
+        // Step 4: Sync promotional prices for active items
         // The items API does not include promotional discounts, so we use /items/{id}/sale_price
         var activeItems = await _db.MeliItems
             .Where(i => i.MeliAccountId == account.Id && i.Status == "active")
