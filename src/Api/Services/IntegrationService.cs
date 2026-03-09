@@ -37,6 +37,13 @@ public class IntegrationService
             i.CreatedAt, i.UpdatedAt);
     }
 
+    public async Task<string?> GetSecretAsync(string provider)
+    {
+        var integration = await _db.Integrations
+            .FirstOrDefaultAsync(x => x.Provider == provider);
+        return integration?.AppSecret;
+    }
+
     public async Task<IntegrationDto> SaveAsync(SaveIntegrationRequest request)
     {
         var existing = await _db.Integrations

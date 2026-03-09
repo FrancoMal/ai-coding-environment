@@ -229,6 +229,34 @@ public class ApiClient
         return await response.Content.ReadFromJsonAsync<MeliItemDto>();
     }
 
+    public async Task<List<OpenAiModelDto>> GetOpenAiModelsAsync()
+    {
+        await SetAuthHeaderAsync();
+        var response = await _http.GetAsync("/api/integrations/openai/models");
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await _authService.LogoutAsync();
+            _navigation.NavigateTo("/login", forceLoad: true);
+            return new();
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync();
+            try
+            {
+                var doc = System.Text.Json.JsonDocument.Parse(errorBody);
+                if (doc.RootElement.TryGetProperty("error", out var errorProp))
+                    throw new Exception(errorProp.GetString());
+            }
+            catch (System.Text.Json.JsonException) { }
+            throw new Exception($"Error al obtener modelos ({response.StatusCode})");
+        }
+
+        return await response.Content.ReadFromJsonAsync<List<OpenAiModelDto>>() ?? new();
+    }
+
     public async Task<int> DeleteMeliItemsBulkAsync(List<int> ids)
     {
         await SetAuthHeaderAsync();

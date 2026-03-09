@@ -42,3 +42,8 @@ public class MeliCallbackRequest
 {
     public string Code { get; set; } = string.Empty;
 }
+
+public class OpenAiModelDto
+{
+    public string Id { get; set; } = string.Empty;
+}
