@@ -300,3 +300,25 @@ BEGIN
     VALUES ('SyncMeliItems', 'Sincronizar Publicaciones', 'Sincroniza las publicaciones activas de MercadoLibre', 'Interval', 360, 0);
 END
 GO
+
+-- Products table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Products' AND xtype='U')
+BEGIN
+    CREATE TABLE Products (
+        Id INT PRIMARY KEY IDENTITY(1,1),
+        Title NVARCHAR(200) NOT NULL,
+        Description NVARCHAR(MAX) NULL,
+        Brand NVARCHAR(100) NULL,
+        Model NVARCHAR(100) NULL,
+        Photo1 NVARCHAR(MAX) NULL,
+        Photo2 NVARCHAR(MAX) NULL,
+        Photo3 NVARCHAR(MAX) NULL,
+        CostPrice DECIMAL(18,2) NOT NULL DEFAULT 0,
+        RetailPrice DECIMAL(18,2) NOT NULL DEFAULT 0,
+        Stock INT NOT NULL DEFAULT 0,
+        IsActive BIT NOT NULL DEFAULT 1,
+        CreatedAt DATETIME2 DEFAULT GETDATE(),
+        UpdatedAt DATETIME2 NULL
+    );
+END
+GO

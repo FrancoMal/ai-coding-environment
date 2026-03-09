@@ -52,6 +52,7 @@ builder.Services.AddScoped<MeliOrderService>();
 builder.Services.AddScoped<MeliItemService>();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<ScheduledProcessService>();
+builder.Services.AddScoped<ProductService>();
 
 // Background Jobs
 builder.Services.AddSingleton<IScheduledJob, SyncMeliOrdersJob>();
@@ -112,6 +113,9 @@ builder.Services.AddSwaggerGen(options =>
         }
     });
 });
+
+// Increase request body size for base64 photo uploads
+builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 10 * 1024 * 1024);
 
 var app = builder.Build();
 

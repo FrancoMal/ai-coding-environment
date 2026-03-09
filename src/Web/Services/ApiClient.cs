@@ -97,6 +97,27 @@ public class ApiClient
         return response.IsSuccessStatusCode;
     }
 
+    // --- Products ---
+    public async Task<List<ProductDto>?> GetProductsAsync()
+    {
+        return await GetAsync<List<ProductDto>>("/api/products");
+    }
+
+    public async Task<ProductDto?> CreateProductAsync(CreateProductRequest request)
+    {
+        return await PostAsync<ProductDto>("/api/products", request);
+    }
+
+    public async Task<ProductDto?> UpdateProductAsync(int id, UpdateProductRequest request)
+    {
+        return await PutAsync<ProductDto>($"/api/products/{id}", request);
+    }
+
+    public async Task<bool> DeleteProductAsync(int id)
+    {
+        return await DeleteAsync($"/api/products/{id}");
+    }
+
     // --- Integrations ---
     public async Task<List<IntegrationDto>?> GetIntegrationsAsync()
     {

@@ -1,0 +1,453 @@
+@page "/productos"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject ToastService ToastService
+
+<div class="view-header">
+    <h2>Productos</h2>
+    <p class="view-subtitle">Administra tu catalogo de productos</p>
+</div>
+
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h3>Listado de Productos</h3>
+        <button class="btn btn-primary" @onclick="ShowCreateForm">+ Nuevo Producto</button>
+    </div>
+    <div class="card-body">
+        @if (isLoading)
+        {
+            <p class="text-muted">Cargando productos...</p>
+        }
+        else if (products is null || !products.Any())
+        {
+            <p class="text-muted">No hay productos cargados. Usa el boton "+ Nuevo Producto" para agregar el primero.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">Foto</th>
+                            <th>Titulo</th>
+                            <th>Marca</th>
+                            <th>Modelo</th>
+                            <th style="text-align: right;">Costo</th>
+                            <th style="text-align: right;">PVP</th>
+                            <th style="text-align: center;">Stock</th>
+                            <th style="text-align: center;">Estado</th>
+                            <th style="width: 80px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var product in products)
+                        {
+                            <tr>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(product.Photo1))
+                                    {
+                                        <img src="@product.Photo1" class="product-thumb" alt="@product.Title" />
+                                    }
+                                    else
+                                    {
+                                        <div class="product-thumb-placeholder">
+                                            @SvgIcons.Package
+                                        </div>
+                                    }
+                                </td>
+                                <td><strong>@product.Title</strong></td>
+                                <td>@(product.Brand ?? "-")</td>
+                                <td>@(product.Model ?? "-")</td>
+                                <td style="text-align: right;">$@product.CostPrice.ToString("N2")</td>
+                                <td style="text-align: right;">$@product.RetailPrice.ToString("N2")</td>
+                                <td style="text-align: center;">@product.Stock</td>
+                                <td style="text-align: center;">
+                                    <span class="status-badge @(product.IsActive ? "status-active" : "status-inactive")">
+                                        @(product.IsActive ? "Activo" : "Inactivo")
+                                    </span>
+                                </td>
+                                <td class="actions-cell">
+                                    <button class="btn-icon btn-edit" @onclick="() => ShowEditForm(product)" title="Editar">
+                                        @SvgIcons.Edit
+                                    </button>
+                                    <button class="btn-icon btn-delete" @onclick="() => ConfirmDelete(product)" title="Eliminar">
+                                        @SvgIcons.AlertCircle
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@if (showForm)
+{
+    <div class="modal-overlay" @onclick="CloseForm">
+        <div class="modal-card modal-wide" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: whitesmoke;">
+                <h3>@(isEditing ? "Editar Producto" : "Nuevo Producto")</h3>
+                <button class="btn-close" @onclick="CloseForm">&times;</button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(formError))
+                {
+                    <div class="form-error">@formError</div>
+                }
+
+                <div class="form-group">
+                    <label class="form-label">Titulo *</label>
+                    <input class="form-input" @bind="formTitle" placeholder="Nombre del producto" />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Descripcion</label>
+                    <textarea class="form-input" @bind="formDescription" rows="3"
+                              placeholder="Descripcion del producto"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Marca</label>
+                        <input class="form-input" @bind="formBrand" placeholder="Marca" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Modelo</label>
+                        <input class="form-input" @bind="formModel" placeholder="Modelo" />
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Precio de Costo</label>
+                        <input class="form-input" type="number" step="0.01" min="0" @bind="formCostPrice" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">PVP (Precio de Venta)</label>
+                        <input class="form-input" type="number" step="0.01" min="0" @bind="formRetailPrice" />
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Stock</label>
+                        <input class="form-input" type="number" min="0" @bind="formStock" />
+                    </div>
+                    @if (isEditing)
+                    {
+                        <div class="form-group">
+                            <label class="form-label">Estado</label>
+                            <select class="form-input" @bind="formIsActive">
+                                <option value="true">Activo</option>
+                                <option value="false">Inactivo</option>
+                            </select>
+                        </div>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Fotos (maximo 2MB cada una)</label>
+                    <div class="photo-upload-grid">
+                        @for (int i = 0; i < 3; i++)
+                        {
+                            var index = i;
+                            var photo = GetPhoto(index);
+                            <div class="photo-upload-slot @(!string.IsNullOrEmpty(photo) ? "has-photo" : "")">
+                                @if (!string.IsNullOrEmpty(photo))
+                                {
+                                    <img src="@photo" class="photo-preview" alt="Foto @(index + 1)" />
+                                    <button class="photo-remove-btn" type="button" @onclick="() => RemovePhoto(index)"
+                                            title="Quitar foto">&times;</button>
+                                }
+                                else
+                                {
+                                    <label class="photo-upload-label">
+                                        <InputFile OnChange="(e) => OnPhotoSelected(e, index)"
+                                                   accept="image/*" />
+                                        <span class="photo-upload-placeholder">+ Foto @(index + 1)</span>
+                                    </label>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseForm">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SaveProduct" disabled="@isSaving">
+                    @(isSaving ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showDeleteConfirm)
+{
+    <div class="modal-overlay" @onclick="() => showDeleteConfirm = false">
+        <div class="modal-card modal-small" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: whitesmoke;">
+                <h3>Confirmar eliminacion</h3>
+                <button class="btn-close" @onclick="() => showDeleteConfirm = false">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Estas seguro que queres eliminar el producto <strong>@productToDelete?.Title</strong>?</p>
+                <p class="text-muted" style="font-size: 0.85rem;">Esta accion no se puede deshacer.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => showDeleteConfirm = false">Cancelar</button>
+                <button class="btn btn-danger" @onclick="DeleteProduct">Eliminar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ProductDto>? products;
+    private bool isLoading = true;
+    private bool showForm;
+    private bool isEditing;
+    private bool isSaving;
+    private string? formError;
+
+    // Form fields
+    private int? editingProductId;
+    private string formTitle = "";
+    private string formDescription = "";
+    private string formBrand = "";
+    private string formModel = "";
+    private decimal formCostPrice;
+    private decimal formRetailPrice;
+    private int formStock;
+    private bool formIsActive = true;
+    private string? formPhoto1;
+    private string? formPhoto2;
+    private string? formPhoto3;
+
+    // Delete
+    private bool showDeleteConfirm;
+    private ProductDto? productToDelete;
+
+    private const long MaxFileSize = 2 * 1024 * 1024; // 2MB
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            products = await Api.GetProductsAsync();
+        }
+        catch
+        {
+            ToastService.Error("Error al cargar los productos");
+        }
+        isLoading = false;
+    }
+
+    private string? GetPhoto(int index) => index switch
+    {
+        0 => formPhoto1,
+        1 => formPhoto2,
+        2 => formPhoto3,
+        _ => null
+    };
+
+    private void SetPhoto(int index, string? value)
+    {
+        switch (index)
+        {
+            case 0: formPhoto1 = value; break;
+            case 1: formPhoto2 = value; break;
+            case 2: formPhoto3 = value; break;
+        }
+    }
+
+    private void RemovePhoto(int index)
+    {
+        SetPhoto(index, null);
+        StateHasChanged();
+    }
+
+    private async Task OnPhotoSelected(InputFileChangeEventArgs e, int index)
+    {
+        var file = e.File;
+        if (file.Size > MaxFileSize)
+        {
+            ToastService.Error("La foto supera los 2MB permitidos");
+            return;
+        }
+
+        try
+        {
+            var buffer = new byte[file.Size];
+            await file.OpenReadStream(MaxFileSize).ReadAsync(buffer);
+            var base64 = Convert.ToBase64String(buffer);
+            var dataUri = $"data:{file.ContentType};base64,{base64}";
+            SetPhoto(index, dataUri);
+            StateHasChanged();
+        }
+        catch
+        {
+            ToastService.Error("Error al cargar la foto");
+        }
+    }
+
+    private void ShowCreateForm()
+    {
+        isEditing = false;
+        editingProductId = null;
+        formTitle = "";
+        formDescription = "";
+        formBrand = "";
+        formModel = "";
+        formCostPrice = 0;
+        formRetailPrice = 0;
+        formStock = 0;
+        formIsActive = true;
+        formPhoto1 = null;
+        formPhoto2 = null;
+        formPhoto3 = null;
+        formError = null;
+        showForm = true;
+    }
+
+    private void ShowEditForm(ProductDto product)
+    {
+        isEditing = true;
+        editingProductId = product.Id;
+        formTitle = product.Title;
+        formDescription = product.Description ?? "";
+        formBrand = product.Brand ?? "";
+        formModel = product.Model ?? "";
+        formCostPrice = product.CostPrice;
+        formRetailPrice = product.RetailPrice;
+        formStock = product.Stock;
+        formIsActive = product.IsActive;
+        formPhoto1 = product.Photo1;
+        formPhoto2 = product.Photo2;
+        formPhoto3 = product.Photo3;
+        formError = null;
+        showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        showForm = false;
+        formError = null;
+    }
+
+    private async Task SaveProduct()
+    {
+        formError = null;
+
+        if (string.IsNullOrWhiteSpace(formTitle))
+        {
+            formError = "El titulo es obligatorio";
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            if (isEditing && editingProductId.HasValue)
+            {
+                var update = new UpdateProductRequest
+                {
+                    Title = formTitle,
+                    Description = formDescription,
+                    Brand = formBrand,
+                    Model = formModel,
+                    CostPrice = formCostPrice,
+                    RetailPrice = formRetailPrice,
+                    Stock = formStock,
+                    IsActive = formIsActive,
+                    Photo1 = formPhoto1 ?? "",
+                    Photo2 = formPhoto2 ?? "",
+                    Photo3 = formPhoto3 ?? ""
+                };
+
+                var result = await Api.UpdateProductAsync(editingProductId.Value, update);
+                if (result is null)
+                {
+                    formError = "Error al actualizar el producto";
+                    return;
+                }
+                ToastService.Success("Producto actualizado");
+            }
+            else
+            {
+                var create = new CreateProductRequest
+                {
+                    Title = formTitle,
+                    Description = formDescription,
+                    Brand = formBrand,
+                    Model = formModel,
+                    CostPrice = formCostPrice,
+                    RetailPrice = formRetailPrice,
+                    Stock = formStock,
+                    Photo1 = formPhoto1,
+                    Photo2 = formPhoto2,
+                    Photo3 = formPhoto3
+                };
+
+                var result = await Api.CreateProductAsync(create);
+                if (result is null)
+                {
+                    formError = "Error al crear el producto";
+                    return;
+                }
+                ToastService.Success("Producto creado");
+            }
+
+            showForm = false;
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            formError = "Error al guardar: " + ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ConfirmDelete(ProductDto product)
+    {
+        productToDelete = product;
+        showDeleteConfirm = true;
+    }
+
+    private async Task DeleteProduct()
+    {
+        if (productToDelete is null) return;
+
+        try
+        {
+            var result = await Api.DeleteProductAsync(productToDelete.Id);
+            if (result)
+            {
+                ToastService.Success("Producto eliminado");
+                await LoadData();
+            }
+            else
+            {
+                ToastService.Error("Error al eliminar el producto");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error: " + ex.Message);
+        }
+
+        showDeleteConfirm = false;
+        productToDelete = null;
+    }
+}
