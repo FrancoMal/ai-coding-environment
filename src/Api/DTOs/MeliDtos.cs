@@ -115,6 +115,7 @@ public record MeliItemDto(
     string? Condition,
     string? ListingTypeId,
     string? InstallmentTag,
+    bool FreeShipping,
     string? Thumbnail,
     string? Permalink,
     string? Sku,

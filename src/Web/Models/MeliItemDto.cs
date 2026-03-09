@@ -18,6 +18,7 @@ public class MeliItemDto
     public string? Condition { get; set; }
     public string? ListingTypeId { get; set; }
     public string? InstallmentTag { get; set; }
+    public bool FreeShipping { get; set; }
     public string? Thumbnail { get; set; }
     public string? Permalink { get; set; }
     public string? Sku { get; set; }

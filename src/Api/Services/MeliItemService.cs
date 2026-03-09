@@ -43,7 +43,7 @@ public class MeliItemService
                 i.MeliAccount != null ? i.MeliAccount.Nickname : "Desconocida",
                 i.Title, i.CategoryId, i.CategoryPath, i.Price, i.OriginalPrice, i.CurrencyId,
                 i.AvailableQuantity, i.SoldQuantity, i.Status,
-                i.Condition, i.ListingTypeId, i.InstallmentTag, i.Thumbnail, i.Permalink,
+                i.Condition, i.ListingTypeId, i.InstallmentTag, i.FreeShipping, i.Thumbnail, i.Permalink,
                 i.Sku, i.UserProductId, i.FamilyId, i.FamilyName,
                 i.DateCreated, i.LastUpdated))
             .ToListAsync();
@@ -141,7 +141,7 @@ public class MeliItemService
             item.Id, item.MeliItemId, item.MeliAccountId, nickname,
             item.Title, item.CategoryId, item.CategoryPath, item.Price, item.OriginalPrice, item.CurrencyId,
             item.AvailableQuantity, item.SoldQuantity, item.Status,
-            item.Condition, item.ListingTypeId, item.InstallmentTag, item.Thumbnail, item.Permalink,
+            item.Condition, item.ListingTypeId, item.InstallmentTag, item.FreeShipping, item.Thumbnail, item.Permalink,
             item.Sku, item.UserProductId, item.FamilyId, item.FamilyName,
             item.DateCreated, item.LastUpdated);
     }
@@ -611,6 +611,13 @@ public class MeliItemService
             }
         }
 
+        // Free shipping
+        var freeShipping = false;
+        if (item.TryGetProperty("shipping", out var shipping) && shipping.ValueKind == JsonValueKind.Object)
+        {
+            freeShipping = shipping.TryGetProperty("free_shipping", out var fs) && fs.ValueKind == JsonValueKind.True;
+        }
+
         var existing = await _db.MeliItems.FirstOrDefaultAsync(i => i.MeliItemId == meliItemId);
 
         if (existing is not null)
@@ -632,6 +639,7 @@ public class MeliItemService
             existing.FamilyId = familyId;
             existing.FamilyName = familyName;
             existing.InstallmentTag = installmentTag;
+            existing.FreeShipping = freeShipping;
             existing.LastUpdated = lastUpdated;
             existing.UpdatedAt = DateTime.UtcNow;
         }
@@ -658,6 +666,7 @@ public class MeliItemService
                 FamilyId = familyId,
                 FamilyName = familyName,
                 InstallmentTag = installmentTag,
+                FreeShipping = freeShipping,
                 DateCreated = dateCreated,
                 LastUpdated = lastUpdated
             });
@@ -742,26 +751,29 @@ public class MeliItemService
             }
         }
 
-        // Step 2: Get shipping costs
-        try
+        // Step 2: Get shipping costs (only if item offers free shipping - seller pays)
+        if (item.FreeShipping)
         {
-            var userId = item.MeliAccount.MeliUserId;
-            var shippingUrl = $"https://api.mercadolibre.com/users/{userId}/shipping_options/free?item_id={meliItemId}&item_price={price.ToString(System.Globalization.CultureInfo.InvariantCulture)}&free_shipping=true&listing_type_id={item.ListingTypeId}";
-            var shippingResp = await http.GetAsync(shippingUrl);
-            if (shippingResp.IsSuccessStatusCode)
+            try
             {
-                var shippingJson = await shippingResp.Content.ReadAsStringAsync();
-                using var shippingDoc = JsonDocument.Parse(shippingJson);
-                if (shippingDoc.RootElement.TryGetProperty("coverage", out var coverage)
-                    && coverage.TryGetProperty("all_country", out var allCountry)
-                    && allCountry.TryGetProperty("list_cost", out var listCost)
-                    && listCost.ValueKind == JsonValueKind.Number)
+                var userId = item.MeliAccount.MeliUserId;
+                var shippingUrl = $"https://api.mercadolibre.com/users/{userId}/shipping_options/free?item_id={meliItemId}&item_price={price.ToString(System.Globalization.CultureInfo.InvariantCulture)}&free_shipping=true&listing_type_id={item.ListingTypeId}";
+                var shippingResp = await http.GetAsync(shippingUrl);
+                if (shippingResp.IsSuccessStatusCode)
                 {
-                    result.ShippingCost = listCost.GetDecimal();
+                    var shippingJson = await shippingResp.Content.ReadAsStringAsync();
+                    using var shippingDoc = JsonDocument.Parse(shippingJson);
+                    if (shippingDoc.RootElement.TryGetProperty("coverage", out var coverage)
+                        && coverage.TryGetProperty("all_country", out var allCountry)
+                        && allCountry.TryGetProperty("list_cost", out var listCost)
+                        && listCost.ValueKind == JsonValueKind.Number)
+                    {
+                        result.ShippingCost = listCost.GetDecimal();
+                    }
                 }
             }
+            catch { /* Shipping cost is optional */ }
         }
-        catch { /* Shipping cost is optional */ }
 
 
         // Net amount = price - sale_fee - listing_fee - taxes

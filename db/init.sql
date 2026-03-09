@@ -234,3 +234,11 @@ BEGIN
     ALTER TABLE MeliItems ADD InstallmentTag NVARCHAR(50) NULL;
 END
 GO
+
+-- Add FreeShipping column to MeliItems
+IF EXISTS (SELECT * FROM sysobjects WHERE name='MeliItems' AND xtype='U')
+   AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MeliItems') AND name = 'FreeShipping')
+BEGIN
+    ALTER TABLE MeliItems ADD FreeShipping BIT NOT NULL DEFAULT 0;
+END
+GO
