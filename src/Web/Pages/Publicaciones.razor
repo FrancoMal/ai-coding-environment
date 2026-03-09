@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject ApiClient Api
 @inject ToastService ToastService
+@inject IJSRuntime JS
 
 <div class="card">
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
@@ -576,14 +577,21 @@
                                         </div>
                                         <span class="cost-line-amount">$ @itemCosts.ShippingCost.ToString("N2", argCulture)</span>
                                     </div>
-                                    <div class="cost-line">
-                                        <span class="cost-line-label">Impuestos estimados*</span>
-                                        <span class="cost-line-amount negative">-$ @itemCosts.TaxesEstimated.ToString("N2", argCulture)</span>
+                                    <div class="cost-line cost-line-tax">
+                                        <div>
+                                            <span class="cost-line-label">Retenciones</span>
+                                            <div class="cost-line-sub">% sobre el precio</div>
+                                        </div>
+                                        <div class="cost-tax-input">
+                                            <input type="text" class="cost-tax-field" value="@FormatTaxPct()" @oninput="OnTaxPercentageChanged" inputmode="decimal" />
+                                            <span class="cost-tax-pct">%</span>
+                                            <span class="cost-line-amount negative" style="margin-left: 0.5rem;">-$ @(CalculateTaxAmount().ToString("N2", argCulture))</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="cost-total">
                                     <span class="cost-total-label">Recibis</span>
-                                    <span class="cost-total-value">$ @itemCosts.NetAmount.ToString("N2", argCulture)</span>
+                                    <span class="cost-total-value">$ @(CalculateNetAmount().ToString("N2", argCulture))</span>
                                 </div>
                             }
                             else
@@ -1074,6 +1082,31 @@
         padding: 1rem;
         color: #9ca3af;
         font-size: 0.8rem;
+    }
+    .cost-line-tax {
+        flex-wrap: wrap;
+    }
+    .cost-tax-input {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+    }
+    .cost-tax-field {
+        width: 50px;
+        padding: 2px 4px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        text-align: right;
+        background: white;
+    }
+    .cost-tax-field:focus {
+        outline: none;
+        border-color: #3b82f6;
+    }
+    .cost-tax-pct {
+        font-size: 0.75rem;
+        color: #6b7280;
     }
 
     /* Detail sections */
@@ -1926,6 +1959,7 @@
     private ListingCostDto? itemCosts;
     private bool isLoadingCosts;
     private static readonly System.Globalization.CultureInfo argCulture = new("es-AR");
+    private decimal taxPercentage;
 
     private async void OpenItemModal(MeliItemDto item)
     {
@@ -1961,6 +1995,21 @@
             StateHasChanged();
         }
 
+
+        // Load tax percentage from localStorage for this MeLi account
+        try
+        {
+            var taxKey = $"meli_tax_pct_{item.MeliAccountId}";
+            var savedTax = await JS.InvokeAsync<string?>("localStorage.getItem", taxKey);
+            if (!string.IsNullOrEmpty(savedTax) && decimal.TryParse(savedTax, NumberStyles.Any, CultureInfo.InvariantCulture, out var savedPct))
+                taxPercentage = savedPct;
+            else
+                taxPercentage = 0;
+        }
+        catch
+        {
+            taxPercentage = 0;
+        }
         // Load cost simulator
         isLoadingCosts = true;
         StateHasChanged();
@@ -1974,6 +2023,41 @@
         }
         isLoadingCosts = false;
         StateHasChanged();
+    }
+
+    private string FormatTaxPct() => taxPercentage == 0 ? "0" : taxPercentage.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private decimal CalculateTaxAmount()
+    {
+        if (itemCosts is null) return 0;
+        return Math.Round(itemCosts.Price * taxPercentage / 100m, 2);
+    }
+
+    private decimal CalculateNetAmount()
+    {
+        if (itemCosts is null) return 0;
+        var taxes = CalculateTaxAmount();
+        return Math.Round(itemCosts.Price - itemCosts.SaleFeeAmount - itemCosts.ListingFeeAmount - itemCosts.ShippingCost - taxes, 2);
+    }
+
+    private async Task OnTaxPercentageChanged(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString() ?? "";
+        raw = raw.Replace('.', ',');
+        if (decimal.TryParse(raw, NumberStyles.Any, argCulture, out var pct))
+        {
+            taxPercentage = Math.Max(0, Math.Min(100, pct));
+        }
+        else if (string.IsNullOrWhiteSpace(raw))
+        {
+            taxPercentage = 0;
+        }
+        // Save to localStorage per MeLi account
+        if (selectedItem is not null)
+        {
+            var key = $"meli_tax_pct_{selectedItem.MeliAccountId}";
+            await JS.InvokeVoidAsync("localStorage.setItem", key, taxPercentage.ToString(CultureInfo.InvariantCulture));
+        }
     }
 
     private string GetPromoTypeLabel(string type) => type switch

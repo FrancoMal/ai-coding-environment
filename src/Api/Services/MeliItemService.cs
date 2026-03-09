@@ -763,11 +763,10 @@ public class MeliItemService
         }
         catch { /* Shipping cost is optional */ }
 
-        // Taxes estimated (simplified: IVA 21% on sale_fee)
-        result.TaxesEstimated = Math.Round(result.SaleFeeAmount * 0.21m, 2);
 
         // Net amount = price - sale_fee - listing_fee - taxes
-        result.NetAmount = Math.Round(price - result.SaleFeeAmount - result.ListingFeeAmount - result.ShippingCost - result.TaxesEstimated, 2);
+        // NetAmount without taxes (taxes calculated in frontend with user percentage)
+        result.NetAmount = Math.Round(price - result.SaleFeeAmount - result.ListingFeeAmount - result.ShippingCost, 2);
 
         return result;
     }
