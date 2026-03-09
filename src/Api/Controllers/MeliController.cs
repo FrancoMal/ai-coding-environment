@@ -146,11 +146,25 @@ public class MeliController : ControllerBase
     }
 
     [HttpPost("items/sync")]
-    public async Task<IActionResult> SyncItems()
+    public async Task<IActionResult> SyncItems([FromQuery] string? status = null, [FromQuery] int? accountId = null)
     {
         try
         {
-            var result = await _itemService.SyncItemsAsync();
+            var result = await _itemService.SyncItemsAsync(status, accountId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("items/{meliItemId}/promotions")]
+    public async Task<IActionResult> GetItemPromotions(string meliItemId)
+    {
+        try
+        {
+            var result = await _itemService.GetItemPromotionsAsync(meliItemId);
             return Ok(result);
         }
         catch (Exception ex)

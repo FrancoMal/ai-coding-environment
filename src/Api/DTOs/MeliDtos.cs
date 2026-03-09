@@ -105,13 +105,16 @@ public record MeliItemDto(
     string AccountNickname,
     string Title,
     string? CategoryId,
+    string? CategoryPath,
     decimal Price,
+    decimal? OriginalPrice,
     string CurrencyId,
     int AvailableQuantity,
     int SoldQuantity,
     string Status,
     string? Condition,
     string? ListingTypeId,
+    string? InstallmentTag,
     string? Thumbnail,
     string? Permalink,
     string? Sku,
@@ -127,3 +130,19 @@ public record MeliItemsResponse(List<MeliItemDto> Items, int Total);
 public record MeliItemSyncResult(int TotalSynced, int TotalErrors, List<string> Errors);
 
 public record UpdateMeliItemRequest(string? Title, decimal? Price, int? AvailableQuantity, string? Status);
+
+// --- Item Promotion DTOs ---
+
+public class ItemPromotionDto
+{
+    public string PromotionId { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public DateTime? StartDate { get; set; }
+    public DateTime? FinishDate { get; set; }
+    public decimal? MeliPercentage { get; set; }
+    public decimal? SellerPercentage { get; set; }
+    public decimal? PromotionPrice { get; set; }
+    public decimal? OriginalPrice { get; set; }
+}

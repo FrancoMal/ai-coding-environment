@@ -58,7 +58,7 @@
                                 </div>
                             </th>
                             <!-- Fecha: label + sort + date dropdown -->
-                            <th class="th-dropdown">
+                            <th class="th-dropdown @(showDateFilter ? "filter-open" : "")">
                                 <div class="th-inner">
                                     <span class="th-label" @onclick='() => ToggleSort("fecha")'>Fecha</span>
                                     <span class="th-icons">
@@ -98,7 +98,7 @@
                                 }
                             </th>
                             <!-- Cuenta: label + sort + checkbox dropdown -->
-                            <th class="th-dropdown">
+                            <th class="th-dropdown @(activeFilterColumn == "cuenta" ? "filter-open" : "")">
                                 <div class="th-inner">
                                     <span class="th-label" @onclick='() => ToggleSort("cuenta")'>Cuenta</span>
                                     <span class="th-icons">
@@ -185,7 +185,7 @@
                                 </div>
                             </th>
                             <!-- Estado: label + sort + checkbox dropdown -->
-                            <th class="th-dropdown">
+                            <th class="th-dropdown @(activeFilterColumn == "estado" ? "filter-open" : "")">
                                 <div class="th-inner">
                                     <span class="th-label" @onclick='() => ToggleSort("estado")'>Estado</span>
                                     <span class="th-icons">
@@ -228,7 +228,7 @@
                             {
                                 <tr class="pack-header-row clickable-row" @onclick="() => ShowPackDetail(group.PackId!.Value)">
                                     <td><strong>Pack @group.PackId</strong></td>
-                                    <td>@group.Orders.First().DateCreated.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>@group.Orders.First().DateCreated.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                                     <td>@group.Orders.First().AccountNickname</td>
                                     <td>@group.Orders.First().BuyerNickname</td>
                                     <td><em>@group.Orders.Count productos</em></td>
@@ -261,7 +261,7 @@
                                 var order = group.Orders.First();
                                 <tr class="clickable-row" @onclick="() => ShowOrderDetail(order.MeliOrderId)">
                                     <td><strong>@order.MeliOrderId</strong></td>
-                                    <td>@order.DateCreated.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>@order.DateCreated.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                                     <td>@order.AccountNickname</td>
                                     <td>@order.BuyerNickname</td>
                                     <td title="@order.ItemId">@Truncate(order.ItemTitle, 40)</td>
@@ -324,7 +324,7 @@
                             <div class="detail-info-grid">
                                 <div class="detail-info-item">
                                     <span class="detail-label">Fecha</span>
-                                    <span class="detail-value">@od.DateCreated.ToString("dd/MM/yyyy HH:mm")</span>
+                                    <span class="detail-value">@od.DateCreated.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
                                 </div>
                                 <div class="detail-info-item">
                                     <span class="detail-label">Estado</span>
@@ -450,7 +450,7 @@
                                             </div>
                                             @if (pay.DateApproved.HasValue)
                                             {
-                                                <div class="payment-date">Aprobado: @pay.DateApproved.Value.ToString("dd/MM/yyyy HH:mm")</div>
+                                                <div class="payment-date">Aprobado: @pay.DateApproved.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
                                             }
                                         </div>
                                     }
@@ -495,6 +495,9 @@
         cursor: pointer;
         user-select: none;
         white-space: nowrap;
+    }
+    .th-dropdown.filter-open {
+        z-index: 1002;
     }
 
     /* Column headers - with inline filter input */
@@ -1145,6 +1148,7 @@
     // --- Sort ---
     private void ToggleSort(string column)
     {
+        activeFilterColumn = null; // Cerrar dropdown de filtro al ordenar
         if (sortColumn == column)
             sortAsc = !sortAsc;
         else

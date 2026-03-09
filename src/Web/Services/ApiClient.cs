@@ -168,9 +168,19 @@ public class ApiClient
         return await GetAsync<MeliItemsResponse>(url);
     }
 
-    public async Task<MeliItemSyncResult?> SyncMeliItemsAsync()
+    public async Task<MeliItemSyncResult?> SyncMeliItemsAsync(string? status = null, int? accountId = null)
     {
-        return await PostAsync<MeliItemSyncResult>("/api/meli/items/sync", new { });
+        var url = "/api/meli/items/sync";
+        var queryParams = new List<string>();
+        if (!string.IsNullOrEmpty(status)) queryParams.Add($"status={status}");
+        if (accountId.HasValue) queryParams.Add($"accountId={accountId.Value}");
+        if (queryParams.Any()) url += "?" + string.Join("&", queryParams);
+        return await PostAsync<MeliItemSyncResult>(url, new { });
+    }
+
+    public async Task<List<ItemPromotionDto>?> GetItemPromotionsAsync(string meliItemId)
+    {
+        return await GetAsync<List<ItemPromotionDto>>($"/api/meli/items/{meliItemId}/promotions");
     }
 
     public async Task<MeliItemDto?> UpdateMeliItemAsync(string meliItemId, UpdateMeliItemRequest request)

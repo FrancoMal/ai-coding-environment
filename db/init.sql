@@ -164,6 +164,7 @@ BEGIN
         Title NVARCHAR(500) NOT NULL,
         CategoryId NVARCHAR(50) NULL,
         Price DECIMAL(18,2) NOT NULL DEFAULT 0,
+        OriginalPrice DECIMAL(18,2) NULL,
         CurrencyId NVARCHAR(10) NOT NULL DEFAULT 'ARS',
         AvailableQuantity INT NOT NULL DEFAULT 0,
         SoldQuantity INT NOT NULL DEFAULT 0,
@@ -216,4 +217,20 @@ END
 GO
 
 PRINT 'Database initialized successfully';
+GO
+
+-- Add CategoryPath column to MeliItems
+IF EXISTS (SELECT * FROM sysobjects WHERE name='MeliItems' AND xtype='U')
+   AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MeliItems') AND name = 'CategoryPath')
+BEGIN
+    ALTER TABLE MeliItems ADD CategoryPath NVARCHAR(500) NULL;
+END
+GO
+
+-- Add InstallmentTag column to MeliItems
+IF EXISTS (SELECT * FROM sysobjects WHERE name='MeliItems' AND xtype='U')
+   AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MeliItems') AND name = 'InstallmentTag')
+BEGIN
+    ALTER TABLE MeliItems ADD InstallmentTag NVARCHAR(50) NULL;
+END
 GO

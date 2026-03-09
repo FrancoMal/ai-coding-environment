@@ -8,13 +8,16 @@ public class MeliItemDto
     public string AccountNickname { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string? CategoryId { get; set; }
+    public string? CategoryPath { get; set; }
     public decimal Price { get; set; }
+    public decimal? OriginalPrice { get; set; }
     public string CurrencyId { get; set; } = "ARS";
     public int AvailableQuantity { get; set; }
     public int SoldQuantity { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? Condition { get; set; }
     public string? ListingTypeId { get; set; }
+    public string? InstallmentTag { get; set; }
     public string? Thumbnail { get; set; }
     public string? Permalink { get; set; }
     public string? Sku { get; set; }
@@ -44,4 +47,18 @@ public class UpdateMeliItemRequest
     public decimal? Price { get; set; }
     public int? AvailableQuantity { get; set; }
     public string? Status { get; set; }
+}
+
+public class ItemPromotionDto
+{
+    public string PromotionId { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public DateTime? StartDate { get; set; }
+    public DateTime? FinishDate { get; set; }
+    public decimal? MeliPercentage { get; set; }
+    public decimal? SellerPercentage { get; set; }
+    public decimal? PromotionPrice { get; set; }
+    public decimal? OriginalPrice { get; set; }
 }

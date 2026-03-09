@@ -12,12 +12,14 @@ public class MeliOrderService
     private readonly AppDbContext _db;
     private readonly IHttpClientFactory _httpFactory;
     private readonly MeliAccountService _accountService;
+    private readonly AuditLogService _auditLog;
 
-    public MeliOrderService(AppDbContext db, IHttpClientFactory httpFactory, MeliAccountService accountService)
+    public MeliOrderService(AppDbContext db, IHttpClientFactory httpFactory, MeliAccountService accountService, AuditLogService auditLog)
     {
         _db = db;
         _httpFactory = httpFactory;
         _accountService = accountService;
+        _auditLog = auditLog;
     }
 
     public async Task<MeliOrdersResponse> GetOrdersAsync(DateTime from, DateTime to, int? meliAccountId = null)
@@ -74,6 +76,17 @@ public class MeliOrderService
             }
         }
 
+        // Audit log for sync - include full error details as JSON
+        var auditData = new
+        {
+            resumen = $"Sincronizados {totalSynced} ordenes, {totalErrors} errores",
+            totalSincronizados = totalSynced,
+            totalErrores = totalErrors,
+            errores = errors
+        };
+        var syncJson = System.Text.Json.JsonSerializer.Serialize(auditData);
+        await _auditLog.LogAsync("Sync", "orders", "SYNC", syncJson);
+
         return new MeliOrderSyncResult(totalSynced, totalErrors, errors);
     }
 
@@ -100,6 +113,20 @@ public class MeliOrderService
                 $"&offset={offset}&limit={limit}";
 
             var response = await http.GetAsync(url);
+
+            // Si devuelve 401/403, refrescar token y reintentar
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                var newToken = await _accountService.GetValidTokenAsync(account, forceRefresh: true);
+                if (newToken is not null)
+                {
+                    token = newToken;
+                    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                    response = await http.GetAsync(url);
+                }
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 var errorBody = await response.Content.ReadAsStringAsync();
@@ -142,7 +169,12 @@ public class MeliOrderService
 
         var token = await _accountService.GetValidTokenAsync(dbOrder.MeliAccount!);
         if (token is null)
-            throw new Exception("Token expirado para la cuenta");
+        {
+            // Forzar refresh si el token normal falla
+            token = await _accountService.GetValidTokenAsync(dbOrder.MeliAccount!, forceRefresh: true);
+            if (token is null)
+                throw new Exception("Token expirado para la cuenta. Reconecta la cuenta de MercadoLibre.");
+        }
 
         var http = _httpFactory.CreateClient();
         http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
@@ -185,7 +217,11 @@ public class MeliOrderService
         var account = dbOrders.First().MeliAccount!;
         var token = await _accountService.GetValidTokenAsync(account);
         if (token is null)
-            throw new Exception("Token expirado para la cuenta");
+        {
+            token = await _accountService.GetValidTokenAsync(account, forceRefresh: true);
+            if (token is null)
+                throw new Exception("Token expirado para la cuenta. Reconecta la cuenta de MercadoLibre.");
+        }
 
         var http = _httpFactory.CreateClient();
         http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);

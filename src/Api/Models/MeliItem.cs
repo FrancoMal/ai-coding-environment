@@ -7,13 +7,16 @@ public class MeliItem
     public int MeliAccountId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? CategoryId { get; set; }
+    public string? CategoryPath { get; set; }
     public decimal Price { get; set; }
+    public decimal? OriginalPrice { get; set; }
     public string CurrencyId { get; set; } = "ARS";
     public int AvailableQuantity { get; set; }
     public int SoldQuantity { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? Condition { get; set; }
     public string? ListingTypeId { get; set; }
+    public string? InstallmentTag { get; set; }
     public string? Thumbnail { get; set; }
     public string? Permalink { get; set; }
     public string? Sku { get; set; }

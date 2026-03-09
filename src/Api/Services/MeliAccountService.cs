@@ -132,9 +132,9 @@ public class MeliAccountService
         return await _db.MeliAccounts.ToListAsync();
     }
 
-    public async Task<string?> GetValidTokenAsync(MeliAccount account)
+    public async Task<string?> GetValidTokenAsync(MeliAccount account, bool forceRefresh = false)
     {
-        if (account.TokenExpiresAt > DateTime.UtcNow.AddMinutes(5))
+        if (!forceRefresh && account.TokenExpiresAt > DateTime.UtcNow.AddMinutes(5))
             return account.AccessToken;
 
         var refreshed = await RefreshTokenAsync(account);

@@ -41,9 +41,9 @@ public class MeliItemService
             .Select(i => new MeliItemDto(
                 i.Id, i.MeliItemId, i.MeliAccountId,
                 i.MeliAccount != null ? i.MeliAccount.Nickname : "Desconocida",
-                i.Title, i.CategoryId, i.Price, i.CurrencyId,
+                i.Title, i.CategoryId, i.CategoryPath, i.Price, i.OriginalPrice, i.CurrencyId,
                 i.AvailableQuantity, i.SoldQuantity, i.Status,
-                i.Condition, i.ListingTypeId, i.Thumbnail, i.Permalink,
+                i.Condition, i.ListingTypeId, i.InstallmentTag, i.Thumbnail, i.Permalink,
                 i.Sku, i.UserProductId, i.FamilyId, i.FamilyName,
                 i.DateCreated, i.LastUpdated))
             .ToListAsync();
@@ -89,6 +89,19 @@ public class MeliItemService
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             var response = await http.PutAsync($"https://api.mercadolibre.com/items/{meliItemId}", content);
 
+            // Si MeLi devuelve 401/403, intentar refrescar el token y reintentar una vez
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                var newToken = await _accountService.GetValidTokenAsync(item.MeliAccount, forceRefresh: true);
+                if (newToken is not null)
+                {
+                    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", newToken);
+                    content = new StringContent(json, Encoding.UTF8, "application/json");
+                    response = await http.PutAsync($"https://api.mercadolibre.com/items/{meliItemId}", content);
+                }
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 var errorBody = await response.Content.ReadAsStringAsync();
@@ -126,16 +139,138 @@ public class MeliItemService
         var nickname = item.MeliAccount?.Nickname ?? "Desconocida";
         return new MeliItemDto(
             item.Id, item.MeliItemId, item.MeliAccountId, nickname,
-            item.Title, item.CategoryId, item.Price, item.CurrencyId,
+            item.Title, item.CategoryId, item.CategoryPath, item.Price, item.OriginalPrice, item.CurrencyId,
             item.AvailableQuantity, item.SoldQuantity, item.Status,
-            item.Condition, item.ListingTypeId, item.Thumbnail, item.Permalink,
+            item.Condition, item.ListingTypeId, item.InstallmentTag, item.Thumbnail, item.Permalink,
             item.Sku, item.UserProductId, item.FamilyId, item.FamilyName,
             item.DateCreated, item.LastUpdated);
     }
 
-    public async Task<MeliItemSyncResult> SyncItemsAsync()
+    public async Task<List<ItemPromotionDto>> GetItemPromotionsAsync(string meliItemId)
+    {
+        var item = await _db.MeliItems
+            .Include(i => i.MeliAccount)
+            .FirstOrDefaultAsync(i => i.MeliItemId == meliItemId);
+
+        if (item is null)
+            throw new Exception($"Item {meliItemId} no encontrado");
+        if (item.MeliAccount is null)
+            throw new Exception($"Cuenta asociada no encontrada para {meliItemId}");
+
+        var token = await _accountService.GetValidTokenAsync(item.MeliAccount);
+        if (token is null)
+            throw new Exception("Token expirado. Reconecta la cuenta de MercadoLibre.");
+
+        var http = _httpFactory.CreateClient();
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var userId = item.MeliAccount.MeliUserId.ToString();
+
+        // Try URL patterns - the one without /marketplace/ prefix works
+        var urlsToTry = new[]
+        {
+            $"https://api.mercadolibre.com/seller-promotions/items/{meliItemId}?app_version=v2",
+            $"https://api.mercadolibre.com/marketplace/seller-promotions/items/{meliItemId}?user_id={userId}&app_version=v2",
+        };
+
+        string? promoJson = null;
+
+        foreach (var promoUrl in urlsToTry)
+        {
+            using var promoRequest = new HttpRequestMessage(HttpMethod.Get, promoUrl);
+            promoRequest.Headers.Add("version", "v2");
+            promoRequest.Headers.Add("x-caller-id", userId);
+            var promoResponse = await http.SendAsync(promoRequest);
+
+            if (promoResponse.IsSuccessStatusCode)
+            {
+                promoJson = await promoResponse.Content.ReadAsStringAsync();
+                break;
+            }
+
+            // On 401/403 refresh token once and retry same URL
+            if (promoResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                promoResponse.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                var newToken = await _accountService.GetValidTokenAsync(item.MeliAccount, forceRefresh: true);
+                if (newToken is not null)
+                {
+                    token = newToken;
+                    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                    using var retryRequest = new HttpRequestMessage(HttpMethod.Get, promoUrl);
+                    retryRequest.Headers.Add("version", "v2");
+                    retryRequest.Headers.Add("x-caller-id", userId);
+                    var retryResponse = await http.SendAsync(retryRequest);
+
+                    if (retryResponse.IsSuccessStatusCode)
+                    {
+                        promoJson = await retryResponse.Content.ReadAsStringAsync();
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (promoJson is null)
+            return new List<ItemPromotionDto>();
+
+        var promoDoc = JsonDocument.Parse(promoJson).RootElement;
+
+        var result = new List<ItemPromotionDto>();
+
+        if (promoDoc.ValueKind != JsonValueKind.Array)
+            return result;
+
+        foreach (var promo in promoDoc.EnumerateArray())
+        {
+            var promoId = promo.TryGetProperty("id", out var pid) ? pid.GetString() ?? "" : "";
+            var promoType = promo.TryGetProperty("type", out var pt) ? pt.GetString() ?? "" : "";
+            var promoStatus = promo.TryGetProperty("status", out var ps) ? ps.GetString() ?? "" : "";
+            var promoName = promo.TryGetProperty("name", out var pn) ? pn.GetString() ?? "" : "";
+
+            DateTime? startDate = promo.TryGetProperty("start_date", out var sd) && sd.ValueKind != JsonValueKind.Null
+                ? sd.GetDateTime() : null;
+            DateTime? finishDate = promo.TryGetProperty("finish_date", out var fd) && fd.ValueKind != JsonValueKind.Null
+                ? fd.GetDateTime() : null;
+
+            // Parse percentage breakdown and prices directly from the first response
+            decimal? meliPct = promo.TryGetProperty("meli_percentage", out var mp) && mp.ValueKind == JsonValueKind.Number
+                ? mp.GetDecimal() : null;
+            decimal? sellerPct = promo.TryGetProperty("seller_percentage", out var sp) && sp.ValueKind == JsonValueKind.Number
+                ? sp.GetDecimal() : null;
+            decimal? promoPrice = promo.TryGetProperty("price", out var pp) && pp.ValueKind == JsonValueKind.Number
+                ? pp.GetDecimal() : null;
+            decimal? originalPrice = promo.TryGetProperty("original_price", out var opp) && opp.ValueKind == JsonValueKind.Number
+                ? opp.GetDecimal() : null;
+
+            var dto = new ItemPromotionDto
+            {
+                PromotionId = promoId,
+                Type = promoType,
+                Status = promoStatus,
+                Name = promoName,
+                StartDate = startDate,
+                FinishDate = finishDate,
+                MeliPercentage = meliPct,
+                SellerPercentage = sellerPct,
+                PromotionPrice = promoPrice,
+                OriginalPrice = originalPrice
+            };
+
+            result.Add(dto);
+        }
+
+        return result;
+    }
+
+    public async Task<MeliItemSyncResult> SyncItemsAsync(string? statusFilter = null, int? accountId = null)
     {
         var accounts = await _accountService.GetAllAccountEntitiesAsync();
+
+        // Filter by account if specified
+        if (accountId.HasValue)
+            accounts = accounts.Where(a => a.Id == accountId.Value).ToList();
+
         int totalSynced = 0;
         int totalErrors = 0;
         var errors = new List<string>();
@@ -152,7 +287,7 @@ public class MeliItemService
                     continue;
                 }
 
-                var synced = await SyncItemsForAccountAsync(account, token);
+                var synced = await SyncItemsForAccountAsync(account, token, statusFilter);
                 totalSynced += synced;
             }
             catch (Exception ex)
@@ -162,30 +297,62 @@ public class MeliItemService
             }
         }
 
-        // Audit log for sync
-        var syncInfo = $"Sincronizados {totalSynced} items, {totalErrors} errores";
-        await _auditLog.LogAsync("Sync", "items", "SYNC", syncInfo);
+        // Audit log for sync - include full error details as JSON
+        var filterDesc = statusFilter is not null ? $" (filtro: {statusFilter})" : "";
+        var auditData = new
+        {
+            resumen = $"Sincronizados {totalSynced} items, {totalErrors} errores{filterDesc}",
+            totalSincronizados = totalSynced,
+            totalErrores = totalErrors,
+            filtro = statusFilter,
+            errores = errors
+        };
+        var syncJson = System.Text.Json.JsonSerializer.Serialize(auditData);
+        await _auditLog.LogAsync("Sync", "items", "SYNC", syncJson);
 
         return new MeliItemSyncResult(totalSynced, totalErrors, errors);
     }
 
-    private async Task<int> SyncItemsForAccountAsync(MeliAccount account, string token)
+    private async Task<int> SyncItemsForAccountAsync(MeliAccount account, string token, string? statusFilter = null)
     {
         var http = _httpFactory.CreateClient();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        // Step 1: Get all item IDs via search
+        // Step 1: Get all item IDs via search using scan mode (supports >1000 items)
         var allItemIds = new List<string>();
-        int offset = 0;
         int limit = 100;
-        bool hasMore = true;
+        string? scrollId = null;
+        bool isFirstRequest = true;
 
-        while (hasMore)
+        while (true)
         {
+            // Use search_type=scan for pagination (MeLi requirement for >1000 results)
             var url = $"https://api.mercadolibre.com/users/{account.MeliUserId}/items/search" +
-                $"?offset={offset}&limit={limit}";
+                $"?search_type=scan&limit={limit}";
+
+            // Add scroll_id for subsequent pages
+            if (!isFirstRequest && !string.IsNullOrEmpty(scrollId))
+                url += $"&scroll_id={scrollId}";
+
+            // Add status filter if specified (active, paused, closed)
+            if (!string.IsNullOrEmpty(statusFilter))
+                url += $"&status={statusFilter}";
 
             var response = await http.GetAsync(url);
+
+            // Si devuelve 401/403, refrescar token y reintentar
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                var newToken = await _accountService.GetValidTokenAsync(account, forceRefresh: true);
+                if (newToken is not null)
+                {
+                    token = newToken;
+                    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                    response = await http.GetAsync(url);
+                }
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 var errorBody = await response.Content.ReadAsStringAsync();
@@ -196,17 +363,24 @@ public class MeliItemService
             var doc = JsonDocument.Parse(json).RootElement;
 
             var results = doc.GetProperty("results");
+            int count = 0;
             foreach (var id in results.EnumerateArray())
             {
                 var itemId = id.GetString();
                 if (!string.IsNullOrEmpty(itemId))
                     allItemIds.Add(itemId);
+                count++;
             }
 
-            var paging = doc.GetProperty("paging");
-            var total = paging.GetProperty("total").GetInt32();
-            offset += limit;
-            hasMore = offset < total;
+            // Get scroll_id for next page - null or missing means we're done
+            scrollId = doc.TryGetProperty("scroll_id", out var sid) && sid.ValueKind != JsonValueKind.Null
+                ? sid.GetString() : null;
+
+            isFirstRequest = false;
+
+            // Stop if no results returned or no scroll_id for next page
+            if (count == 0 || string.IsNullOrEmpty(scrollId))
+                break;
         }
 
         // Step 2: Batch fetch item details (20 at a time)
@@ -235,6 +409,108 @@ public class MeliItemService
             await _db.SaveChangesAsync();
         }
 
+        // Step 3: Sync promotional prices for active items
+        // The items API does not include promotional discounts, so we use /items/{id}/sale_price
+        var activeItems = await _db.MeliItems
+            .Where(i => i.MeliAccountId == account.Id && i.Status == "active")
+            .Select(i => new { i.Id, i.MeliItemId })
+            .ToListAsync();
+
+        foreach (var ai in activeItems)
+        {
+            try
+            {
+                var spResponse = await http.GetAsync(
+                    $"https://api.mercadolibre.com/items/{ai.MeliItemId}/sale_price?app_version=v2");
+
+                if (!spResponse.IsSuccessStatusCode)
+                {
+                    // No sale_price means no active promotion - clear OriginalPrice if set
+                    var itemToClean = await _db.MeliItems.FindAsync(ai.Id);
+                    if (itemToClean is not null && itemToClean.OriginalPrice.HasValue)
+                    {
+                        itemToClean.OriginalPrice = null;
+                    }
+                    continue;
+                }
+
+                var spJson = await spResponse.Content.ReadAsStringAsync();
+                var spDoc = JsonDocument.Parse(spJson).RootElement;
+
+                var promoAmount = spDoc.TryGetProperty("amount", out var amt) && amt.ValueKind == JsonValueKind.Number
+                    ? amt.GetDecimal() : (decimal?)null;
+                var regularAmount = spDoc.TryGetProperty("regular_amount", out var reg) && reg.ValueKind == JsonValueKind.Number
+                    ? reg.GetDecimal() : (decimal?)null;
+
+                if (promoAmount.HasValue && promoAmount.Value > 0 && regularAmount.HasValue && regularAmount.Value > promoAmount.Value)
+                {
+                    var itemToUpdate = await _db.MeliItems.FindAsync(ai.Id);
+                    if (itemToUpdate is not null)
+                    {
+                        itemToUpdate.Price = promoAmount.Value;
+                        itemToUpdate.OriginalPrice = regularAmount.Value;
+                    }
+                }
+            }
+            catch
+            {
+                // Skip individual item errors
+            }
+        }
+
+        await _db.SaveChangesAsync();
+
+        // Step 4: Sync category paths for items missing CategoryPath
+        var itemsMissingCatPath = await _db.MeliItems
+            .Where(i => i.MeliAccountId == account.Id && i.CategoryId != null && i.CategoryPath == null)
+            .Select(i => new { i.Id, i.CategoryId })
+            .ToListAsync();
+
+        var categoryCache = new Dictionary<string, string>();
+        foreach (var ci in itemsMissingCatPath)
+        {
+            if (string.IsNullOrEmpty(ci.CategoryId)) continue;
+            try
+            {
+                if (!categoryCache.TryGetValue(ci.CategoryId, out var path))
+                {
+                    var catResponse = await http.GetAsync(
+                        $"https://api.mercadolibre.com/categories/{ci.CategoryId}");
+                    if (catResponse.IsSuccessStatusCode)
+                    {
+                        var catJson = await catResponse.Content.ReadAsStringAsync();
+                        var catDoc = JsonDocument.Parse(catJson).RootElement;
+                        if (catDoc.TryGetProperty("path_from_root", out var pathArr) && pathArr.ValueKind == JsonValueKind.Array)
+                        {
+                            var names = new List<string>();
+                            foreach (var node in pathArr.EnumerateArray())
+                            {
+                                if (node.TryGetProperty("name", out var n) && n.ValueKind != JsonValueKind.Null)
+                                    names.Add(n.GetString() ?? "");
+                            }
+                            path = string.Join(" > ", names);
+                        }
+                        else
+                        {
+                            path = ci.CategoryId;
+                        }
+                    }
+                    else
+                    {
+                        path = ci.CategoryId;
+                    }
+                    categoryCache[ci.CategoryId] = path;
+                }
+
+                var itemToUpdate = await _db.MeliItems.FindAsync(ci.Id);
+                if (itemToUpdate is not null)
+                    itemToUpdate.CategoryPath = path;
+            }
+            catch { }
+        }
+
+        await _db.SaveChangesAsync();
+
         return synced;
     }
 
@@ -244,6 +520,8 @@ public class MeliItemService
         var title = item.GetProperty("title").GetString() ?? "Sin titulo";
         var price = item.TryGetProperty("price", out var pr) && pr.ValueKind != JsonValueKind.Null
             ? pr.GetDecimal() : 0m;
+        var originalPrice = item.TryGetProperty("original_price", out var op) && op.ValueKind != JsonValueKind.Null
+            ? op.GetDecimal() : (decimal?)null;
         var currencyId = item.TryGetProperty("currency_id", out var cur) && cur.ValueKind != JsonValueKind.Null
             ? cur.GetString() ?? "ARS" : "ARS";
         var availableQty = item.TryGetProperty("available_quantity", out var aq) && aq.ValueKind != JsonValueKind.Null
@@ -259,8 +537,27 @@ public class MeliItemService
             ? cat.GetString() : null;
         var permalink = item.TryGetProperty("permalink", out var pl) && pl.ValueKind != JsonValueKind.Null
             ? pl.GetString() : null;
-        var sku = item.TryGetProperty("seller_custom_field", out var scf) && scf.ValueKind != JsonValueKind.Null
-            ? scf.GetString() : null;
+        // SKU: prioritize SELLER_SKU attribute, fallback to seller_custom_field
+        string? sku = null;
+        if (item.TryGetProperty("attributes", out var attrs) && attrs.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var attr in attrs.EnumerateArray())
+            {
+                var attrId = attr.TryGetProperty("id", out var aid) ? aid.GetString() : null;
+                if (attrId == "SELLER_SKU")
+                {
+                    sku = attr.TryGetProperty("value_name", out var vn) && vn.ValueKind != JsonValueKind.Null
+                        ? vn.GetString() : null;
+                    break;
+                }
+            }
+        }
+        // Fallback to seller_custom_field if SELLER_SKU attribute not found
+        if (string.IsNullOrEmpty(sku))
+        {
+            sku = item.TryGetProperty("seller_custom_field", out var scf) && scf.ValueKind != JsonValueKind.Null
+                ? scf.GetString() : null;
+        }
         var dateCreated = item.TryGetProperty("date_created", out var dc) && dc.ValueKind != JsonValueKind.Null
             ? dc.GetDateTime() : (DateTime?)null;
         var lastUpdated = item.TryGetProperty("last_updated", out var lu) && lu.ValueKind != JsonValueKind.Null
@@ -298,6 +595,22 @@ public class MeliItemService
         if (familyName is null && item.TryGetProperty("family_name", out var fname2) && fname2.ValueKind != JsonValueKind.Null)
             familyName = fname2.GetString();
 
+        // Installment tag from item tags
+        string? installmentTag = null;
+        if (item.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Array)
+        {
+            var installmentTags = new[] { "12x_campaign", "9x_campaign", "3x_campaign", "pcj-co-funded" };
+            foreach (var tag in tags.EnumerateArray())
+            {
+                var tagStr = tag.GetString();
+                if (tagStr is not null && installmentTags.Contains(tagStr))
+                {
+                    installmentTag = tagStr;
+                    break;
+                }
+            }
+        }
+
         var existing = await _db.MeliItems.FirstOrDefaultAsync(i => i.MeliItemId == meliItemId);
 
         if (existing is not null)
@@ -305,6 +618,7 @@ public class MeliItemService
             existing.Title = title;
             existing.CategoryId = categoryId;
             existing.Price = price;
+            existing.OriginalPrice = originalPrice;
             existing.CurrencyId = currencyId;
             existing.AvailableQuantity = availableQty;
             existing.SoldQuantity = soldQty;
@@ -317,6 +631,7 @@ public class MeliItemService
             existing.UserProductId = userProductId;
             existing.FamilyId = familyId;
             existing.FamilyName = familyName;
+            existing.InstallmentTag = installmentTag;
             existing.LastUpdated = lastUpdated;
             existing.UpdatedAt = DateTime.UtcNow;
         }
@@ -329,6 +644,7 @@ public class MeliItemService
                 Title = title,
                 CategoryId = categoryId,
                 Price = price,
+                OriginalPrice = originalPrice,
                 CurrencyId = currencyId,
                 AvailableQuantity = availableQty,
                 SoldQuantity = soldQty,
@@ -341,6 +657,7 @@ public class MeliItemService
                 UserProductId = userProductId,
                 FamilyId = familyId,
                 FamilyName = familyName,
+                InstallmentTag = installmentTag,
                 DateCreated = dateCreated,
                 LastUpdated = lastUpdated
             });

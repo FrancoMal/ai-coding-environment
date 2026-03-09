@@ -5,10 +5,47 @@
 
 <div class="card">
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-        <h3>Publicaciones de MercadoLibre (@totalItems)</h3>
-        <button class="btn btn-primary" @onclick="SyncItems" disabled="@isSyncing">
-            @(isSyncing ? "Sincronizando..." : "Sincronizar")
-        </button>
+        <h3>Publicaciones de MercadoLibre (@GetFilteredAndSortedItems().Count de @totalItems)</h3>
+        <div class="sync-dropdown-wrapper">
+            <button class="btn btn-primary" @onclick="() => SyncItems(null, null)" disabled="@isSyncing" style="border-radius: 6px 0 0 6px;">
+                @(isSyncing ? syncingLabel : "Sincronizar")
+            </button>
+            <button class="btn btn-primary sync-dropdown-toggle" @onclick="ToggleSyncMenu" @onclick:stopPropagation="true" disabled="@isSyncing"
+                    style="border-radius: 0 6px 6px 0; border-left: 1px solid rgba(255,255,255,0.3); padding: 0.5rem 0.4rem;">
+                ▾
+            </button>
+            @if (showSyncMenu)
+            {
+                <div class="sync-dropdown-menu">
+                    <div class="sync-dropdown-section">Por estado</div>
+                    <button class="sync-dropdown-item" @onclick='() => SyncItems("active", null)'>
+                        <span class="status-dot dot-active"></span> Solo activas
+                    </button>
+                    <button class="sync-dropdown-item" @onclick='() => SyncItems("paused", null)'>
+                        <span class="status-dot dot-paused"></span> Solo pausadas
+                    </button>
+                    <button class="sync-dropdown-item" @onclick='() => SyncItems("closed", null)'>
+                        <span class="status-dot dot-closed"></span> Solo cerradas
+                    </button>
+                    <div class="sync-dropdown-divider"></div>
+                    <div class="sync-dropdown-section">Por cuenta</div>
+                    @if (meliAccounts is not null)
+                    {
+                        @foreach (var acc in meliAccounts)
+                        {
+                            var a = acc;
+                            <button class="sync-dropdown-item" @onclick="() => SyncItems(null, a.Id)">
+                                👤 @a.Nickname
+                            </button>
+                        }
+                    }
+                    <div class="sync-dropdown-divider"></div>
+                    <button class="sync-dropdown-item sync-item-all" @onclick='() => SyncItems(null, null)'>
+                        🔄 Sincronizar todo
+                    </button>
+                </div>
+            }
+        </div>
     </div>
     <div class="card-body" style="padding: 0;">
         @if (isLoading)
@@ -23,9 +60,14 @@
         {
             <!-- View mode toggle -->
             <div class="view-mode-bar">
-                <button class="view-mode-btn @(viewMode == "flat" ? "active" : "")" @onclick='() => viewMode = "flat"'>Lista</button>
-                <button class="view-mode-btn @(viewMode == "family" ? "active" : "")" @onclick='() => viewMode = "family"'>Por Familia</button>
-                <button class="view-mode-btn @(viewMode == "product" ? "active" : "")" @onclick='() => viewMode = "product"'>Por Producto</button>
+                <div style="display: flex; gap: 0.25rem;">
+                    <button class="view-mode-btn @(viewMode == "flat" ? "active" : "")" @onclick='() => viewMode = "flat"'>Lista</button>
+                    <button class="view-mode-btn @(viewMode == "family" ? "active" : "")" @onclick='() => viewMode = "family"'>Por Familia</button>
+                    <button class="view-mode-btn @(viewMode == "product" ? "active" : "")" @onclick='() => viewMode = "product"'>Por Producto</button>
+                </div>
+                <button class="promo-filter-btn @(filterPromo ? "active" : "")" @onclick="TogglePromoFilter" title="Filtrar publicaciones en promocion">
+                    🏷️ En promocion @(filterPromo ? $"({GetFilteredAndSortedItems().Count})" : "")
+                </button>
             </div>
 
             <div class="table-responsive">
@@ -37,7 +79,7 @@
                             <!-- Titulo: text input -->
                             <th class="th-filterable" style="min-width: 200px;">
                                 <div class="th-filter-inner">
-                                    <input type="text" class="th-filter-input @(IsFilterActive("titulo") ? "has-filter" : "")" placeholder="Titulo"
+                                    <input type="text" class="th-filter-input @(IsFilterActive("titulo") ? "has-filter" : "")" placeholder="Titulo, ID, Familia..."
                                            value='@GetTextFilter("titulo")' @oninput='(e) => SetTextFilter("titulo", e.Value?.ToString() ?? "")' />
                                     <span class="sort-icon" @onclick='() => ToggleSort("titulo")' title="Ordenar">
                                         <span class="@(sortColumn == "titulo" && sortAsc ? "sort-up-active" : "")">&#9650;</span>
@@ -87,7 +129,7 @@
                                 </div>
                             </th>
                             <!-- Estado: checkbox dropdown -->
-                            <th class="th-dropdown">
+                            <th class="th-dropdown @(activeFilterColumn == "estado" ? "filter-open" : "")">
                                 <div class="th-inner">
                                     <span class="th-label" @onclick='() => ToggleSort("estado")'>Estado</span>
                                     <span class="th-icons">
@@ -121,7 +163,7 @@
                                 }
                             </th>
                             <!-- Tipo: checkbox dropdown -->
-                            <th class="th-dropdown">
+                            <th class="th-dropdown @(activeFilterColumn == "tipo" ? "filter-open" : "")">
                                 <div class="th-inner">
                                     <span class="th-label" @onclick='() => ToggleSort("tipo")'>Tipo</span>
                                     <span class="th-icons">
@@ -155,7 +197,7 @@
                                 }
                             </th>
                             <!-- Cuenta: checkbox dropdown -->
-                            <th class="th-dropdown">
+                            <th class="th-dropdown @(activeFilterColumn == "cuenta" ? "filter-open" : "")">
                                 <div class="th-inner">
                                     <span class="th-label" @onclick='() => ToggleSort("cuenta")'>Cuenta</span>
                                     <span class="th-icons">
@@ -220,7 +262,18 @@
                                         <div class="item-id">@item.MeliItemId</div>
                                     </td>
                                     <td>@(item.Sku ?? "-")</td>
-                                    <td>@item.CurrencyId @item.Price.ToString("N2")</td>
+                                    <td>
+                                        @if (item.OriginalPrice.HasValue && item.OriginalPrice.Value > 0 && item.OriginalPrice.Value != item.Price)
+                                        {
+                                            <span class="price-sale">@item.CurrencyId @item.Price.ToString("N2")</span>
+                                            <span class="price-original">@item.CurrencyId @item.OriginalPrice.Value.ToString("N2")</span>
+                                            <span class="price-discount-pct">-@(((item.OriginalPrice.Value - item.Price) / item.OriginalPrice.Value * 100).ToString("N0"))%</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@item.CurrencyId @item.Price.ToString("N2")</span>
+                                        }
+                                    </td>
                                     <td>@item.AvailableQuantity</td>
                                     <td>@item.SoldQuantity</td>
                                     <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
@@ -266,7 +319,18 @@
                                             <div class="item-id">@item.MeliItemId</div>
                                         </td>
                                         <td>@(item.Sku ?? "-")</td>
-                                        <td>@item.CurrencyId @item.Price.ToString("N2")</td>
+                                        <td>
+                                        @if (item.OriginalPrice.HasValue && item.OriginalPrice.Value > 0 && item.OriginalPrice.Value != item.Price)
+                                        {
+                                            <span class="price-sale">@item.CurrencyId @item.Price.ToString("N2")</span>
+                                            <span class="price-original">@item.CurrencyId @item.OriginalPrice.Value.ToString("N2")</span>
+                                            <span class="price-discount-pct">-@(((item.OriginalPrice.Value - item.Price) / item.OriginalPrice.Value * 100).ToString("N0"))%</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@item.CurrencyId @item.Price.ToString("N2")</span>
+                                        }
+                                    </td>
                                         <td>@item.AvailableQuantity</td>
                                         <td>@item.SoldQuantity</td>
                                         <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
@@ -315,7 +379,18 @@
                                                 <div class="item-id">@item.MeliItemId</div>
                                             </td>
                                             <td>@(item.Sku ?? "-")</td>
-                                            <td>@item.CurrencyId @item.Price.ToString("N2")</td>
+                                            <td>
+                                        @if (item.OriginalPrice.HasValue && item.OriginalPrice.Value > 0 && item.OriginalPrice.Value != item.Price)
+                                        {
+                                            <span class="price-sale">@item.CurrencyId @item.Price.ToString("N2")</span>
+                                            <span class="price-original">@item.CurrencyId @item.OriginalPrice.Value.ToString("N2")</span>
+                                            <span class="price-discount-pct">-@(((item.OriginalPrice.Value - item.Price) / item.OriginalPrice.Value * 100).ToString("N0"))%</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@item.CurrencyId @item.Price.ToString("N2")</span>
+                                        }
+                                    </td>
                                             <td>@item.AvailableQuantity</td>
                                             <td>@item.SoldQuantity</td>
                                             <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
@@ -352,7 +427,18 @@
                                             <div class="item-id">@item.MeliItemId</div>
                                         </td>
                                         <td>@(item.Sku ?? "-")</td>
-                                        <td>@item.CurrencyId @item.Price.ToString("N2")</td>
+                                        <td>
+                                        @if (item.OriginalPrice.HasValue && item.OriginalPrice.Value > 0 && item.OriginalPrice.Value != item.Price)
+                                        {
+                                            <span class="price-sale">@item.CurrencyId @item.Price.ToString("N2")</span>
+                                            <span class="price-original">@item.CurrencyId @item.OriginalPrice.Value.ToString("N2")</span>
+                                            <span class="price-discount-pct">-@(((item.OriginalPrice.Value - item.Price) / item.OriginalPrice.Value * 100).ToString("N0"))%</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@item.CurrencyId @item.Price.ToString("N2")</span>
+                                        }
+                                    </td>
                                         <td>@item.AvailableQuantity</td>
                                         <td>@item.SoldQuantity</td>
                                         <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
@@ -369,6 +455,11 @@
     </div>
 </div>
 
+@if (showSyncMenu)
+{
+    <div class="filter-overlay" @onclick="() => showSyncMenu = false"></div>
+}
+
 @if (activeFilterColumn is not null)
 {
     <div class="filter-overlay" @onclick="CloseAllDropdowns"></div>
@@ -384,6 +475,15 @@
             </div>
             <div class="modal-body">
                 <!-- Header: thumbnail + meta -->
+                @if (!string.IsNullOrEmpty(selectedItem.CategoryPath) || !string.IsNullOrEmpty(selectedItem.CategoryId))
+                {
+                    <div style="font-size: 0.72rem; color: #9ca3af; margin-bottom: 0.2rem;">
+                        @(selectedItem.CategoryPath ?? selectedItem.CategoryId) (@selectedItem.CategoryId)
+                    </div>
+                }
+                <div style="margin-bottom: 0.75rem;">
+                    <input type="text" class="form-input" @bind="editFamilyName" style="font-weight: 700; font-size: 1.05rem;" />
+                </div>
                 <div class="item-detail-header">
                     <div class="item-detail-thumb">
                         @if (!string.IsNullOrEmpty(selectedItem.Thumbnail))
@@ -404,8 +504,10 @@
                         <span class="status-badge @GetStatusClass(selectedItem.Status)" style="width: fit-content;">@GetStatusLabel(selectedItem.Status)</span>
                         <span style="font-size: 0.8rem; color: #6b7280;">Cuenta: @selectedItem.AccountNickname</span>
                     </div>
+                    <div style="font-size: 1.15rem; font-weight: 600; color: #374151; flex: 1; margin-left: 35px;">
+                        @selectedItem.Title
+                    </div>
                 </div>
-
                 <!-- Read-only info -->
                 <div class="detail-section">
                     <h4>Informacion</h4>
@@ -419,54 +521,82 @@
                             <span class="detail-value">@selectedItem.SoldQuantity</span>
                         </div>
                         <div class="detail-info-item">
-                            <span class="detail-label">Condicion</span>
-                            <span class="detail-value">@(GetConditionLabel(selectedItem.Condition))</span>
-                        </div>
-                        <div class="detail-info-item">
                             <span class="detail-label">Tipo publicacion</span>
-                            <span class="detail-value">@GetListingTypeLabel(selectedItem.ListingTypeId)</span>
-                        </div>
-                        <div class="detail-info-item">
-                            <span class="detail-label">Categoria</span>
-                            <span class="detail-value">@(selectedItem.CategoryId ?? "-")</span>
-                        </div>
-                        <div class="detail-info-item">
-                            <span class="detail-label">Familia</span>
-                            <span class="detail-value">@(selectedItem.FamilyName ?? "-")</span>
+                            <span class="detail-value">@GetListingTypeLabel(selectedItem.ListingTypeId) @GetInstallmentLabel(selectedItem.ListingTypeId, selectedItem.InstallmentTag)</span>
                         </div>
                         <div class="detail-info-item">
                             <span class="detail-label">Creada</span>
-                            <span class="detail-value">@(selectedItem.DateCreated?.ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
+                            <span class="detail-value">@(selectedItem.DateCreated?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
                         </div>
                         <div class="detail-info-item">
                             <span class="detail-label">Ultima actualizacion</span>
-                            <span class="detail-value">@(selectedItem.LastUpdated?.ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
+                            <span class="detail-value">@(selectedItem.LastUpdated?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Editable fields -->
                 <div class="detail-section">
-                    <h4>Editar</h4>
-                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                        <label class="form-label">Titulo</label>
-                        <input type="text" class="form-input" @bind="editTitle" />
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+                    @if (isLoadingPromotions)
+                    {
+                        <div class="promo-campaigns-loading">
+                            <span>Cargando detalles de campañas...</span>
+                        </div>
+                    }
+                    else if (itemPromotions is not null && itemPromotions.Any())
+                    {
+                        var activeCampaigns = itemPromotions.Where(p => p.Status == "started").ToList();
+                        var otherCampaigns = itemPromotions.Where(p => p.Status != "started").ToList();
+
+                        @if (activeCampaigns.Any())
+                        {
+                            <div class="promo-campaigns">
+                                <span class="promo-campaigns-title">Campañas activas (@activeCampaigns.Count)</span>
+                                @foreach (var promo in activeCampaigns)
+                                {
+                                    @RenderCampaignCard(promo)
+                                }
+                            </div>
+                        }
+
+                        @if (otherCampaigns.Any())
+                        {
+                            <div class="promo-campaigns promo-campaigns-other">
+                                <button class="promo-collapse-toggle" @onclick="() => showOtherCampaigns = !showOtherCampaigns">
+                                    <span>Otras campañas disponibles (@otherCampaigns.Count)</span>
+                                    <span class="promo-collapse-icon">@(showOtherCampaigns ? "▲" : "▼")</span>
+                                </button>
+                                @if (showOtherCampaigns)
+                                {
+                                    @foreach (var promo in otherCampaigns)
+                                    {
+                                        @RenderCampaignCard(promo)
+                                    }
+                                }
+                            </div>
+                        }
+                    }
+                    else if (itemPromotions is not null && !itemPromotions.Any())
+                    {
+                        <div class="promo-campaigns-empty">
+                            <span>No se encontraron campañas asociadas</span>
+                        </div>
+                    }
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label">Precio (@selectedItem.CurrencyId)</label>
-                            <input type="number" class="form-input" @bind="editPrice" step="0.01" min="0" />
+                            <label class="form-label">Precio original (@selectedItem.CurrencyId)</label>
+                            <input type="number" class="form-input" style="font-size: 1.1rem; font-weight: 700;" @bind="editPrice" step="0.01" min="0" />
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label">Stock</label>
-                            <input type="number" class="form-input" @bind="editStock" min="0" />
+                            <input type="number" class="form-input" style="font-size: 1.1rem; font-weight: 700;" @bind="editStock" min="0" />
                         </div>
-                    </div>
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label class="form-label">Estado</label>
-                        <div class="status-toggle">
-                            <button class="status-toggle-btn @(editStatus == "active" ? "active-btn" : "")" @onclick='() => editStatus = "active"'>Activa</button>
-                            <button class="status-toggle-btn @(editStatus == "paused" ? "paused-btn" : "")" @onclick='() => editStatus = "paused"'>Pausada</button>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Estado</label>
+                            <div class="status-toggle">
+                                <button class="status-toggle-btn @(editStatus == "active" ? "active-btn" : "")" @onclick='() => editStatus = "active"'>Activa</button>
+                                <button class="status-toggle-btn @(editStatus == "paused" ? "paused-btn" : "")" @onclick='() => editStatus = "paused"'>Pausada</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -485,6 +615,8 @@
     /* View mode toggle */
     .view-mode-bar {
         display: flex;
+        justify-content: space-between;
+        align-items: center;
         gap: 0.5rem;
         padding: 0.75rem 1rem;
         border-bottom: 1px solid #e5e7eb;
@@ -506,6 +638,26 @@
     }
     .view-mode-btn:hover:not(.active) {
         background: #f3f4f6;
+    }
+
+    .promo-filter-btn {
+        padding: 0.375rem 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: white;
+        color: #374151;
+        cursor: pointer;
+        font-size: 0.8125rem;
+        transition: all 0.15s;
+    }
+    .promo-filter-btn:hover:not(.active) {
+        background: #f0fdf4;
+        border-color: #86efac;
+    }
+    .promo-filter-btn.active {
+        background: #059669;
+        color: white;
+        border-color: #059669;
     }
 
     /* Thumbnail column */
@@ -564,6 +716,9 @@
         cursor: pointer;
         user-select: none;
         white-space: nowrap;
+    }
+    .th-dropdown.filter-open {
+        z-index: 1002;
     }
     .th-filterable {
         white-space: nowrap;
@@ -826,6 +981,354 @@
         background: #fffbeb;
         color: #d97706;
     }
+
+    /* Sync dropdown */
+    .sync-dropdown-wrapper {
+        position: relative;
+        display: flex;
+    }
+    .sync-dropdown-toggle {
+        font-size: 0.75rem;
+    }
+    .sync-dropdown-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        z-index: 1010;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        min-width: 210px;
+        padding: 0.4rem 0;
+        margin-top: 0.25rem;
+    }
+    .sync-dropdown-section {
+        padding: 0.35rem 0.75rem 0.2rem;
+        font-size: 0.7rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 600;
+    }
+    .sync-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        width: 100%;
+        padding: 0.45rem 0.75rem;
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-size: 0.85rem;
+        color: #374151;
+        text-align: left;
+        transition: background 0.1s;
+    }
+    .sync-dropdown-item:hover {
+        background: #f3f4f6;
+    }
+    .sync-item-all {
+        font-weight: 600;
+    }
+    .sync-dropdown-divider {
+        height: 1px;
+        background: #e5e7eb;
+        margin: 0.3rem 0;
+    }
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        flex-shrink: 0;
+    }
+    .dot-active { background: #059669; }
+    .dot-paused { background: #d97706; }
+    .dot-closed { background: #6b7280; }
+
+    .price-original {
+        text-decoration: line-through;
+        color: #9ca3af;
+        font-size: 0.75rem;
+        display: block;
+    }
+    .price-sale {
+        color: #059669;
+        font-weight: 600;
+        display: block;
+    }
+    .price-discount-pct {
+        display: inline-block;
+        background: #dcfce7;
+        color: #16a34a;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.05rem 0.35rem;
+        border-radius: 3px;
+        margin-top: 0.1rem;
+    }
+
+    .promo-price-info {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 8px;
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+    }
+    .promo-info-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .promo-label {
+        background: #059669;
+        color: white;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .promo-discount-badge {
+        background: #fef2f2;
+        color: #dc2626;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+    .promo-content-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    .promo-prices-side {
+        display: flex;
+        gap: 1rem;
+        flex: 1;
+    }
+    .promo-breakdown-side {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        justify-content: center;
+        min-width: fit-content;
+    }
+    .promo-price-col {
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+    }
+    .promo-price-label {
+        font-size: 0.7rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .promo-original {
+        font-size: 0.85rem;
+        color: #6b7280;
+        text-decoration: line-through;
+    }
+    .promo-sale {
+        font-size: 0.9rem;
+        color: #059669;
+        font-weight: 700;
+    }
+    .promo-discount {
+        font-size: 0.85rem;
+        color: #dc2626;
+        font-weight: 400;
+    }
+    .promo-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.75rem;
+        color: #374151;
+    }
+    .promo-legend-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        flex-shrink: 0;
+    }
+    .promo-legend-dot.seller-dot {
+        background: #4f46e5;
+    }
+    .promo-legend-dot.meli-dot {
+        background: #fbbf24;
+    }
+
+    /* Promotion campaigns section */
+    .promo-campaigns-loading {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+        color: #9ca3af;
+        font-style: italic;
+    }
+    .promo-campaigns-empty {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+        color: #9ca3af;
+    }
+    .promo-campaigns {
+        margin-top: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+    .promo-campaigns-title {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #374151;
+        display: block;
+        margin-bottom: 0.4rem;
+    }
+    .promo-campaign-card {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 8px;
+        padding: 0.6rem 0.75rem;
+        margin-bottom: 0.4rem;
+    }
+    .promo-campaign-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.3rem;
+    }
+    .promo-campaign-name {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #166534;
+    }
+    .promo-campaign-status {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.4rem;
+        margin-left: auto;
+    }
+    .promo-campaign-type {
+        margin-bottom: 0.3rem;
+    }
+    .promo-type-badge {
+        font-size: 0.75rem;
+        background: #e5e7eb;
+        color: #374151;
+        padding: 0.1rem 0.5rem;
+        border-radius: 4px;
+        display: inline-block;
+    }
+    .promo-type-badge.cofunded {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .promo-campaign-dates {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.75rem;
+        color: #6b7280;
+        margin-bottom: 0.3rem;
+    }
+
+    /* Campaign prices */
+    .promo-campaign-prices {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.3rem;
+        font-size: 0.8rem;
+        color: #374151;
+    }
+    .promo-campaign-pct {
+        color: #16a34a;
+        font-weight: 600;
+        font-size: 0.75rem;
+    }
+
+    /* Discount breakdown */
+    .promo-breakdown {
+        margin-top: 0.4rem;
+        padding-top: 0.4rem;
+        border-top: 1px dashed #bbf7d0;
+    }
+    .promo-breakdown-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #374151;
+        display: block;
+        margin-bottom: 0.35rem;
+    }
+    .promo-breakdown-bars {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+    .promo-bar-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+    .promo-bar-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.75rem;
+        color: #374151;
+    }
+    .promo-bar-pct {
+        font-weight: 600;
+    }
+    .promo-bar-track {
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .promo-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    .promo-bar-fill.meli-bar {
+        background: #fbbf24;
+    }
+    .promo-bar-fill.seller-bar {
+        background: #4f46e5;
+    }
+    .promo-seller-only {
+        margin-top: 0.3rem;
+        font-size: 0.75rem;
+        color: #6b7280;
+        font-style: italic;
+    }
+
+    /* Collapse toggle for other campaigns */
+    .promo-campaigns-other {
+        margin-top: 0.25rem;
+        margin-bottom: 0.75rem;
+    }
+    .promo-collapse-toggle {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        padding: 0.45rem 0.75rem;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #6b7280;
+        transition: background 0.15s;
+        margin-bottom: 0.4rem;
+    }
+    .promo-collapse-toggle:hover {
+        background: #e5e7eb;
+    }
+    .promo-collapse-icon {
+        font-size: 0.65rem;
+    }
 </style>
 
 @code {
@@ -833,9 +1336,20 @@
     private bool isLoading = true;
     private bool isSyncing;
     private int totalItems;
+    private string syncingLabel = "Sincronizando...";
+
+    // Sync dropdown
+    private bool showSyncMenu;
+    private List<MeliAccountDto>? meliAccounts;
 
     // View mode
     private string viewMode = "flat";
+    private bool filterPromo = false;
+
+    private void TogglePromoFilter()
+    {
+        filterPromo = !filterPromo;
+    }
 
     // Sort state
     private string? sortColumn;
@@ -846,11 +1360,15 @@
 
     // Checkbox filter state
     private string? activeFilterColumn;
-    private Dictionary<string, HashSet<string>> checkboxFilters = new();
+    private Dictionary<string, HashSet<string>> checkboxFilters = new()
+    {
+        ["estado"] = new HashSet<string> { "Activa" }
+    };
 
     protected override async Task OnInitializedAsync()
     {
         await LoadItems();
+        try { meliAccounts = await Api.GetMeliAccountsAsync(); } catch { }
     }
 
     private async Task LoadItems()
@@ -876,14 +1394,32 @@
         isLoading = false;
     }
 
-    private async Task SyncItems()
+    private void ToggleSyncMenu()
     {
+        showSyncMenu = !showSyncMenu;
+    }
+
+    private async Task SyncItems(string? status, int? accountId)
+    {
+        showSyncMenu = false;
         isSyncing = true;
+
+        // Build descriptive label
+        if (status is not null)
+            syncingLabel = $"Sincronizando {GetStatusLabel(status)}s...";
+        else if (accountId.HasValue && meliAccounts is not null)
+        {
+            var acc = meliAccounts.FirstOrDefault(a => a.Id == accountId.Value);
+            syncingLabel = $"Sincronizando {acc?.Nickname ?? "cuenta"}...";
+        }
+        else
+            syncingLabel = "Sincronizando todo...";
+
         StateHasChanged();
 
         try
         {
-            var result = await Api.SyncMeliItemsAsync();
+            var result = await Api.SyncMeliItemsAsync(status, accountId);
             if (result is not null)
             {
                 if (result.TotalErrors > 0)
@@ -904,6 +1440,7 @@
     // --- Sort ---
     private void ToggleSort(string column)
     {
+        activeFilterColumn = null; // Cerrar dropdown de filtro al ordenar
         if (sortColumn == column)
             sortAsc = !sortAsc;
         else
@@ -987,13 +1524,21 @@
 
         var filtered = items.AsEnumerable();
 
+        // Promo filter
+        if (filterPromo)
+            filtered = filtered.Where(i => i.OriginalPrice.HasValue && i.OriginalPrice.Value > 0 && i.OriginalPrice.Value != i.Price);
+
         // Text filters
         foreach (var kv in textFilters.Where(f => !string.IsNullOrEmpty(f.Value)))
         {
             var search = kv.Value;
             filtered = kv.Key switch
             {
-                "titulo" => filtered.Where(i => i.Title.Contains(search, StringComparison.OrdinalIgnoreCase)),
+                "titulo" => filtered.Where(i =>
+                    i.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    i.MeliItemId.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    (i.FamilyId ?? "").Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    (i.UserProductId ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)),
                 "sku" => filtered.Where(i => (i.Sku ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)),
                 _ => filtered
             };
@@ -1098,6 +1643,25 @@
         _ => type ?? "-"
     };
 
+    private string GetInstallmentLabel(string? listingType, string? installmentTag)
+    {
+        if (listingType == "gold_pro")
+        {
+            return installmentTag switch
+            {
+                "3x_campaign" => "| 3 cuotas al mismo precio",
+                "9x_campaign" => "| 9 cuotas al mismo precio",
+                "12x_campaign" => "| 12 cuotas al mismo precio",
+                _ => "| 6 cuotas al mismo precio"
+            };
+        }
+        if (listingType == "gold_special" && installmentTag == "pcj-co-funded")
+        {
+            return "| 3 a 12 cuotas con interes bajo";
+        }
+        return "";
+    }
+
     private string Truncate(string text, int maxLength) =>
         text.Length <= maxLength ? text : text[..maxLength] + "...";
 
@@ -1106,19 +1670,148 @@
     private bool showItemModal;
     private bool isSaving;
     private string editTitle = "";
+    private string editFamilyName = "";
     private decimal editPrice;
     private int editStock;
     private string editStatus = "";
 
-    private void OpenItemModal(MeliItemDto item)
+    // Promotions
+    private List<ItemPromotionDto>? itemPromotions;
+    private bool isLoadingPromotions;
+    private bool showOtherCampaigns;
+
+    private async void OpenItemModal(MeliItemDto item)
     {
         selectedItem = item;
         editTitle = item.Title;
-        editPrice = item.Price;
+        editFamilyName = item.FamilyName ?? "";
+        editPrice = item.OriginalPrice.HasValue && item.OriginalPrice.Value > 0 ? item.OriginalPrice.Value : item.Price;
         editStock = item.AvailableQuantity;
         editStatus = item.Status;
+        itemPromotions = null;
+        isLoadingPromotions = false;
+        showOtherCampaigns = false;
         showItemModal = true;
+        StateHasChanged();
+
+        // Load promotion details if item is in promotion
+        if (item.OriginalPrice.HasValue && item.OriginalPrice.Value > 0 && item.OriginalPrice.Value != item.Price)
+        {
+            isLoadingPromotions = true;
+            StateHasChanged();
+            try
+            {
+                itemPromotions = await Api.GetItemPromotionsAsync(item.MeliItemId);
+            }
+            catch
+            {
+                itemPromotions = new();
+            }
+            isLoadingPromotions = false;
+            StateHasChanged();
+        }
     }
+
+    private string GetPromoTypeLabel(string type) => type switch
+    {
+        "DEAL" => "Tradicional",
+        "MARKETPLACE_CAMPAIGN" => "Co-fondeada",
+        "VOLUME" => "Descuento por volumen",
+        "DOD" => "Oferta del dia",
+        "LIGHTNING" => "Oferta relampago",
+        "PRE_NEGOTIATED" => "Descuento pre-acordado por item",
+        "SELLER_CAMPAIGN" => "Campaña del vendedor",
+        "SMART" => "Campaña co-fondeada automatizada",
+        "PRICE_MATCHING" => "Campaña de precios competitivos",
+        "UNHEALTHY_STOCK" => "Campaña de liquidacion stock Full",
+        "PRICE_DISCOUNT" => "Descuento de precio",
+        _ => type
+    };
+
+    private bool IsCoFunded(string type) =>
+        type == "SMART" || type == "PRICE_MATCHING" || type == "MARKETPLACE_CAMPAIGN" || type == "PRE_NEGOTIATED";
+
+    private string GetPromoStatusLabel(string status) => status switch
+    {
+        "started" => "Activa",
+        "candidate" => "Candidata",
+        "finished" => "Finalizada",
+        "pending" => "Pendiente",
+        _ => status
+    };
+
+    private string GetPromoStatusClass(string status) => status switch
+    {
+        "started" => "status-active",
+        "candidate" => "status-paused",
+        "finished" => "status-closed",
+        _ => ""
+    };
+
+    private RenderFragment RenderCampaignCard(ItemPromotionDto promo) => __builder =>
+    {
+        <div class="promo-campaign-card">
+            <div class="promo-campaign-header">
+                <span class="promo-campaign-name">@(string.IsNullOrEmpty(promo.Name) ? GetPromoTypeLabel(promo.Type) : promo.Name)</span>
+                <span class="promo-type-badge @(IsCoFunded(promo.Type) ? "cofunded" : "")">@GetPromoTypeLabel(promo.Type)</span>
+                <span class="promo-campaign-status status-badge @GetPromoStatusClass(promo.Status)">@GetPromoStatusLabel(promo.Status)</span>
+            </div>
+            @if (promo.PromotionPrice.HasValue && promo.PromotionPrice.Value > 0 && promo.OriginalPrice.HasValue && promo.OriginalPrice.Value > 0)
+            {
+                var promoDesc = promo.OriginalPrice.Value - promo.PromotionPrice.Value;
+                var promoPctTotal = promoDesc / promo.OriginalPrice.Value * 100;
+                <div class="promo-info-header">
+                    <span class="promo-label">En promocion</span>
+                    <span class="promo-discount-badge">-@promoPctTotal.ToString("N1")%</span>
+                </div>
+                <div class="promo-content-row">
+                    <div class="promo-prices-side">
+                        <div class="promo-price-col">
+                            <span class="promo-price-label">Original</span>
+                            <span class="promo-original">@selectedItem.CurrencyId @promo.OriginalPrice.Value.ToString("N2")</span>
+                        </div>
+                        <div class="promo-price-col">
+                            <span class="promo-price-label">Ahorro</span>
+                            <span class="promo-discount">-@selectedItem.CurrencyId @promoDesc.ToString("N2")</span>
+                        </div>
+                        <div class="promo-price-col">
+                            <span class="promo-price-label">Precio final</span>
+                            <span class="promo-sale">@selectedItem.CurrencyId @promo.PromotionPrice.Value.ToString("N2")</span>
+                        </div>
+                    </div>
+                    @if (IsCoFunded(promo.Type) && (promo.MeliPercentage.HasValue || promo.SellerPercentage.HasValue))
+                    {
+                        var meliPct = promo.MeliPercentage.GetValueOrDefault();
+                        var sellerPct = promo.SellerPercentage.GetValueOrDefault();
+                        var meliAmount = promo.OriginalPrice.Value * meliPct / 100;
+                        var sellerAmount = promo.OriginalPrice.Value * sellerPct / 100;
+                        <div class="promo-breakdown-side">
+                            @if (sellerPct > 0)
+                            {
+                                <span class="promo-legend-item">
+                                    <span class="promo-legend-dot seller-dot"></span>
+                                    A tu cargo: @sellerPct.ToString("N1")% (-$@sellerAmount.ToString("N2"))
+                                </span>
+                            }
+                            @if (meliPct > 0)
+                            {
+                                <span class="promo-legend-item">
+                                    <span class="promo-legend-dot meli-dot"></span>
+                                    MercadoLibre: @meliPct.ToString("N1")% (-$@meliAmount.ToString("N2"))
+                                </span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else if (!IsCoFunded(promo.Type) && promo.PromotionPrice.HasValue && promo.OriginalPrice.HasValue)
+            {
+                <div class="promo-seller-only">
+                    <span>Descuento asumido por el vendedor</span>
+                </div>
+            }
+        </div>
+    };
 
     private void CloseItemModal()
     {
