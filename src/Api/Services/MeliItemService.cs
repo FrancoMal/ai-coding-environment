@@ -146,7 +146,29 @@ public class MeliItemService
             item.DateCreated, item.LastUpdated);
     }
 
-    public async Task<List<ItemPromotionDto>> GetItemPromotionsAsync(string meliItemId)
+    public async Task<int> DeleteItemsAsync(List<int> ids)
+    {
+        var items = await _db.MeliItems.Where(i => ids.Contains(i.Id)).ToListAsync();
+        if (!items.Any()) return 0;
+
+        var count = items.Count;
+        var meliIds = items.Select(i => i.MeliItemId).ToList();
+        _db.MeliItems.RemoveRange(items);
+        await _db.SaveChangesAsync();
+
+        var auditData = new
+        {
+            resumen = $"Eliminadas {count} publicaciones de la base de datos",
+            cantidad = count,
+            meliItemIds = meliIds
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(auditData);
+        await _auditLog.LogAsync("MeliItem", string.Join(",", meliIds), "BULK_DELETE", json);
+
+        return count;
+    }
+
+        public async Task<List<ItemPromotionDto>> GetItemPromotionsAsync(string meliItemId)
     {
         var item = await _db.MeliItems
             .Include(i => i.MeliAccount)

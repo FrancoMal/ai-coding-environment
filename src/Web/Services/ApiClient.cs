@@ -229,7 +229,26 @@ public class ApiClient
         return await response.Content.ReadFromJsonAsync<MeliItemDto>();
     }
 
-    // --- Audit Logs ---
+    public async Task<int> DeleteMeliItemsBulkAsync(List<int> ids)
+    {
+        await SetAuthHeaderAsync();
+        var response = await _http.PostAsJsonAsync("/api/meli/items/bulk-delete", new { ids });
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await _authService.LogoutAsync();
+            _navigation.NavigateTo("/login", forceLoad: true);
+            return 0;
+        }
+
+        if (!response.IsSuccessStatusCode)
+            throw new Exception($"Error al eliminar publicaciones ({response.StatusCode})");
+
+        var result = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        return result.GetProperty("deleted").GetInt32();
+    }
+
+        // --- Audit Logs ---
     public async Task<AuditLogListResponse?> GetAuditLogsAsync(DateTime from, DateTime to, string? entityType = null, int page = 1)
     {
         var url = $"/api/audit-logs?from={from:yyyy-MM-ddTHH:mm:ss}&to={to:yyyy-MM-ddTHH:mm:ss}&page={page}";

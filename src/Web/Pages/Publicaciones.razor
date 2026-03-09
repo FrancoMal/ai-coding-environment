@@ -71,10 +71,24 @@
                 </button>
             </div>
 
-            <div class="table-responsive">
+            @if (selectedItems.Count > 0)
+            {
+                <div class="bulk-actions-bar">
+                    <span><strong>@selectedItems.Count</strong> publicaciones seleccionadas</span>
+                    <button class="btn btn-danger btn-sm" @onclick="ShowBulkDeleteModal">
+                        🗑️ Eliminar seleccionadas
+                    </button>
+                    <button class="btn btn-secondary btn-sm" @onclick="ClearSelection">
+                        Deseleccionar
+                    </button>
+                </div>
+            }
+
+                        <div class="table-responsive">
                 <table class="data-table">
                     <thead>
                         <tr>
+                            <th class="th-checkbox"><input type="checkbox" @onchange="ToggleSelectAll" checked="@IsAllSelected()" title="Seleccionar todos" /></th>
                             <!-- Imagen -->
                             <th class="th-img">Img</th>
                             <!-- Titulo: text input -->
@@ -237,7 +251,8 @@
                         @if (viewMode == "flat")
                         {
                             <Virtualize Items="@GetCachedFilteredItems()" Context="item" OverscanCount="5" ItemSize="50">
-                                <tr class="clickable-row" @onclick="() => OpenItemModal(item)">
+                                <tr class="clickable-row @(selectedItems.Contains(item.Id) ? "row-selected" : "")" @onclick="() => OpenItemModal(item)">
+                                    <td class="td-checkbox" @onclick:stopPropagation="true"><input type="checkbox" checked="@selectedItems.Contains(item.Id)" @onchange="() => ToggleSelectItem(item.Id)" /></td>
                                     <td style="text-align: center;">
                                         @if (!string.IsNullOrEmpty(item.Thumbnail))
                                         {
@@ -287,14 +302,15 @@
                             @foreach (var family in GetFamilyGroups())
                             {
                                 <tr class="group-header-row">
-                                    <td colspan="9">
+                                    <td colspan="10">
                                         <strong>@(family.FamilyName ?? "Sin familia")</strong>
                                         <small class="text-muted" style="margin-left: 0.5rem;">(@family.Items.Count items)</small>
                                     </td>
                                 </tr>
                                 @foreach (var item in family.Items)
                                 {
-                                    <tr class="group-item-row clickable-row" @onclick="() => OpenItemModal(item)">
+                                    <tr class="group-item-row clickable-row @(selectedItems.Contains(item.Id) ? "row-selected" : "")" @onclick="() => OpenItemModal(item)">
+                                        <td class="td-checkbox" @onclick:stopPropagation="true"><input type="checkbox" checked="@selectedItems.Contains(item.Id)" @onchange="() => ToggleSelectItem(item.Id)" /></td>
                                         <td style="text-align: center;">
                                             @if (!string.IsNullOrEmpty(item.Thumbnail))
                                             {
@@ -347,7 +363,7 @@
                                 @if (product.Items.Count > 1)
                                 {
                                     <tr class="group-header-row">
-                                        <td colspan="9">
+                                        <td colspan="10">
                                             <strong>@Truncate(product.Title, 60)</strong>
                                             <small class="text-muted" style="margin-left: 0.5rem;">(@product.Items.Count variaciones)</small>
                                         </td>
@@ -402,7 +418,8 @@
                                 else
                                 {
                                     var item = product.Items[0];
-                                    <tr class="clickable-row" @onclick="() => OpenItemModal(item)">
+                                    <tr class="clickable-row @(selectedItems.Contains(item.Id) ? "row-selected" : "")" @onclick="() => OpenItemModal(item)">
+                                        <td class="td-checkbox" @onclick:stopPropagation="true"><input type="checkbox" checked="@selectedItems.Contains(item.Id)" @onchange="() => ToggleSelectItem(item.Id)" /></td>
                                         <td style="text-align: center;">
                                             @if (!string.IsNullOrEmpty(item.Thumbnail))
                                             {
@@ -1525,7 +1542,37 @@
     .promo-collapse-icon {
         font-size: 0.65rem;
     }
+    .th-checkbox, .td-checkbox { width: 36px; text-align: center; padding: 0.4rem !important; }
+    .td-checkbox input[type="checkbox"], .th-checkbox input[type="checkbox"] { cursor: pointer; width: 16px; height: 16px; }
+    .row-selected { background: #eff6ff !important; }
+    .row-selected:hover { background: #dbeafe !important; }
+    .bulk-actions-bar { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; margin-bottom: 0.75rem; font-size: 0.9rem; }
+    .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.85rem; }
 </style>
+
+@if (showDeleteModal)
+{
+    <div class="modal-overlay" @onclick="CloseDeleteModal">
+        <div class="modal-card modal-small" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: #dc3545; color: white;">
+                <h4 style="margin: 0;">Eliminar publicaciones</h4>
+                <button class="btn-close" @onclick="CloseDeleteModal" style="color: white;">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estas seguro de eliminar <strong>@selectedItems.Count</strong> publicaciones de la base de datos?</p>
+                <div style="background: #d4edda; border: 1px solid #28a745; border-radius: 8px; padding: 0.75rem; margin-top: 0.75rem;">
+                    <span style="color: #155724;"><strong>Importante:</strong> Solo se eliminan de esta aplicacion. NO se eliminan de MercadoLibre.</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseDeleteModal" disabled="@isDeleting">Cancelar</button>
+                <button class="btn btn-danger" @onclick="ConfirmBulkDelete" disabled="@isDeleting">
+                    @(isDeleting ? "Eliminando..." : "Eliminar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private List<MeliItemDto>? items;
@@ -1543,6 +1590,11 @@
     // View mode
     private string viewMode = "flat";
     private bool filterPromo = false;
+
+    // Selection & bulk actions
+    private HashSet<int> selectedItems = new();
+    private bool showDeleteModal;
+    private bool isDeleting;
 
     private void TogglePromoFilter()
     {
@@ -1830,7 +1882,66 @@
     }
 
     // --- Helpers ---
-    private string GetStatusClass(string status) => status switch
+    // --- Selection & Bulk Delete ---
+    private void ToggleSelectItem(int id)
+    {
+        if (!selectedItems.Remove(id))
+            selectedItems.Add(id);
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var filtered = GetCachedFilteredItems();
+        if (filtered == null) return;
+
+        var allSelected = IsAllSelected();
+        if (allSelected)
+            selectedItems.Clear();
+        else
+        {
+            foreach (var item in filtered)
+                selectedItems.Add(item.Id);
+        }
+    }
+
+    private bool IsAllSelected()
+    {
+        var filtered = GetCachedFilteredItems();
+        if (filtered == null || filtered.Count == 0) return false;
+        return filtered.All(i => selectedItems.Contains(i.Id));
+    }
+
+    private void ClearSelection() => selectedItems.Clear();
+
+    private void ShowBulkDeleteModal() => showDeleteModal = true;
+
+    private void CloseDeleteModal() => showDeleteModal = false;
+
+    private async Task ConfirmBulkDelete()
+    {
+        if (selectedItems.Count == 0) return;
+        isDeleting = true;
+
+        try
+        {
+            var deleted = await Api.DeleteMeliItemsBulkAsync(selectedItems.ToList());
+            ToastService.Success($"Se eliminaron {deleted} publicaciones");
+            showDeleteModal = false;
+            selectedItems.Clear();
+            // Recargar items
+            await LoadItems();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error($"Error al eliminar: {ex.Message}");
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+
+        private string GetStatusClass(string status) => status switch
     {
         "active" => "status-active",
         "paused" => "status-paused",

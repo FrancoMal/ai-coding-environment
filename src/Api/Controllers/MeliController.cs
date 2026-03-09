@@ -209,4 +209,20 @@ public class MeliController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    [HttpPost("items/bulk-delete")]
+    public async Task<IActionResult> BulkDeleteItems([FromBody] BulkDeleteRequest request)
+    {
+        if (request.Ids == null || !request.Ids.Any())
+            return BadRequest(new { error = "No se proporcionaron IDs" });
+
+        var deleted = await _itemService.DeleteItemsAsync(request.Ids);
+        return Ok(new { deleted });
+    }
 }
+
+public class BulkDeleteRequest
+{
+    public List<int> Ids { get; set; } = new();
+}
+
