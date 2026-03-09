@@ -215,7 +215,16 @@
 
                 <div class="form-group" style="margin-top: 1rem;">
                     <label class="form-label">Para confirmar, escribi <strong>@deleteStats.Nickname</strong> en el campo de abajo:</label>
-                    <input type="text" class="form-input" @bind="deleteConfirmText" @bind:event="oninput" placeholder="Escribi el nombre de la cuenta..." />
+                    <input type="text" class="form-input" @bind="deleteConfirmText" @bind:event="oninput" placeholder="Escribi el nombre de la cuenta..."
+                           style="@(deleteConfirmText.Length > 0 && deleteConfirmText != deleteStats.Nickname ? "border-color: #dc3545;" : "")" />
+                    @if (deleteConfirmText.Length > 0 && deleteConfirmText != deleteStats.Nickname)
+                    {
+                        <small style="color: #dc3545; margin-top: 0.25rem; display: block;">El texto no coincide. Escribi exactamente <strong>@deleteStats.Nickname</strong> para confirmar.</small>
+                    }
+                    else if (string.IsNullOrEmpty(deleteConfirmText))
+                    {
+                        <small style="color: #856404; margin-top: 0.25rem; display: block;">Debes completar este campo para confirmar la eliminacion.</small>
+                    }
                 </div>
             </div>
             <div class="modal-footer">
