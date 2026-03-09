@@ -1071,7 +1071,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadAccounts();
-        await SyncAndLoad();
+        await LoadOrders();
     }
 
     private async Task LoadAccounts()
