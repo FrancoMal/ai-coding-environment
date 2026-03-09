@@ -691,9 +691,9 @@ public class MeliItemService
         var http = _httpFactory.CreateClient();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var price = item.OriginalPrice.HasValue && item.OriginalPrice.Value > 0
-            ? item.OriginalPrice.Value
-            : item.Price;
+        // Use item.Price (precio final / lo que paga el comprador) para calcular costos
+        // Si hay promocion, Price ya es el precio con descuento
+        var price = item.Price;
 
         // Build query params
         var queryParams = $"price={price.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
