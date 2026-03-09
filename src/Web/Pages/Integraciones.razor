@@ -170,6 +170,55 @@
             </div>
         }
     </div>
+
+    <!-- Claude (Anthropic) -->
+    <div class="integration-card @(claudeActive ? "integration-active" : "")">
+        <div class="integration-card-header">
+            <div class="integration-logo">
+                <span class="integration-logo-icon claude-logo">CL</span>
+            </div>
+            <div class="integration-info">
+                <h3>Claude (Anthropic)</h3>
+                <p>Conecta tu API Key de Anthropic para usar modelos Claude en otras funciones del programa.</p>
+            </div>
+            <div class="integration-header-actions">
+                <span class="status-badge @(claudeActive ? "status-active" : "status-inactive")">
+                    @(claudeActive ? "Activa" : "Inactiva")
+                </span>
+                <button class="btn btn-secondary btn-sm" @onclick="OpenClaudeModal">Configurar</button>
+            </div>
+        </div>
+
+        @if (claudeId > 0 && claudeActive)
+        {
+            <div class="integration-accounts" style="padding: 1rem 1.5rem;">
+                <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                    <div>
+                        <small class="text-muted">Modelo</small>
+                        <div><strong>@claudeModel</strong></div>
+                    </div>
+                    <div>
+                        <small class="text-muted">Max Tokens</small>
+                        <div><strong>@claudeMaxTokens</strong></div>
+                    </div>
+                    <div>
+                        <small class="text-muted">Temperatura</small>
+                        <div><strong>@claudeTemperature.ToString("F1")</strong></div>
+                    </div>
+                    <div>
+                        <small class="text-muted">API Key</small>
+                        <div><strong>@(claudeHasSecret ? "Configurada" : "No configurada")</strong></div>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (claudeId == 0)
+        {
+            <div style="padding: 1rem 1.5rem;">
+                <p class="text-muted">Configura tu API Key de Anthropic para habilitar las funciones con Claude.</p>
+            </div>
+        }
+    </div>
 </div>
 
 <!-- Modal: Configuracion MercadoLibre -->
@@ -326,6 +375,98 @@
     </div>
 }
 
+<!-- Modal: Configuracion Claude -->
+@if (showClaudeModal)
+{
+    <div class="modal-overlay" @onclick="CloseClaudeModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Configuracion de Claude (Anthropic)</h3>
+                <button class="btn-close" @onclick="CloseClaudeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <div class="input-with-hint">
+                        <input type="password" class="form-input" @bind="claudeApiKey"
+                               placeholder="@(claudeHasSecret ? "Ya configurada" : "sk-ant-...")" />
+                        @if (claudeHasSecret)
+                        {
+                            <span class="input-hint">Deja en blanco para mantener la actual</span>
+                        }
+                        else
+                        {
+                            <span class="input-hint">Ingresa tu API Key y guarda para ver los modelos disponibles</span>
+                        }
+                    </div>
+                </div>
+
+                @if (claudeHasSecret)
+                {
+                    @if (loadingClaudeModels)
+                    {
+                        <div class="form-group">
+                            <label class="form-label">Modelo</label>
+                            <div class="form-input" style="color: var(--text-muted); background: #f9fafb;">Cargando modelos disponibles...</div>
+                        </div>
+                    }
+                    else if (claudeModels is not null && claudeModels.Count > 0)
+                    {
+                        <div class="form-group">
+                            <label class="form-label">Modelo <small class="text-muted">(@claudeModels.Count disponibles)</small></label>
+                            <select class="form-input" @bind="claudeModel">
+                                @foreach (var model in claudeModels)
+                                {
+                                    <option value="@model.Id">@model.DisplayName</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(claudeModelsError))
+                    {
+                        <div class="form-group">
+                            <label class="form-label">Modelo</label>
+                            <div style="color: var(--danger); font-size: 0.85rem;">@claudeModelsError</div>
+                        </div>
+                    }
+
+                    <div class="form-group">
+                        <label class="form-label">Temperatura: <strong>@claudeTemperature.ToString("F1")</strong></label>
+                        <input type="range" class="form-range" min="0" max="1" step="0.1" @bind="claudeTemperature" @bind:event="oninput" />
+                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);">
+                            <span>Preciso (0)</span>
+                            <span>Creativo (1)</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Tokens</label>
+                        <input type="number" class="form-input" @bind="claudeMaxTokens" min="1" max="64000" />
+                        <span class="input-hint">Maximo de tokens que puede generar el modelo en una respuesta</span>
+                    </div>
+                }
+
+                <div class="form-group">
+                    <label class="form-label">
+                        <input type="checkbox" @bind="claudeActive" /> Integracion activa
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                @if (claudeId > 0)
+                {
+                    <button class="btn btn-danger" @onclick="DeleteClaude" disabled="@claudeSaving">
+                        Eliminar
+                    </button>
+                }
+                <button class="btn btn-secondary" @onclick="CloseClaudeModal">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SaveClaude" disabled="@claudeSaving">
+                    @(claudeSaving ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 <!-- Modal: Quitar cuenta -->
 @if (showDeleteConfirm && deleteStats != null)
 {
@@ -405,6 +546,20 @@
     private bool loadingModels;
     private string? openaiModelsError;
 
+    // Claude (Anthropic) config fields
+    private int claudeId;
+    private string claudeApiKey = "";
+    private bool claudeActive;
+    private bool claudeHasSecret;
+    private string claudeModel = "claude-sonnet-4-20250514";
+    private int claudeMaxTokens = 4096;
+    private double claudeTemperature = 1.0;
+    private bool showClaudeModal;
+    private bool claudeSaving;
+    private List<ClaudeModelDto>? claudeModels;
+    private bool loadingClaudeModels;
+    private string? claudeModelsError;
+
     // Accounts
     private List<MeliAccountDto>? accounts;
     private bool connecting;
@@ -425,6 +580,7 @@
     {
         await LoadMercadoLibre();
         await LoadOpenAi();
+        await LoadClaude();
         await LoadAccounts();
     }
 
@@ -591,6 +747,145 @@
         finally
         {
             openaiSaving = false;
+        }
+    }
+
+        // --- Claude (Anthropic) Methods ---
+    private async Task LoadClaude()
+    {
+        try
+        {
+            var integration = await Api.GetIntegrationAsync("claude");
+            if (integration is not null)
+            {
+                claudeId = integration.Id;
+                claudeActive = integration.IsActive;
+                claudeHasSecret = integration.HasSecret;
+                if (!string.IsNullOrEmpty(integration.Settings))
+                {
+                    try
+                    {
+                        var doc = System.Text.Json.JsonDocument.Parse(integration.Settings);
+                        var root = doc.RootElement;
+                        if (root.TryGetProperty("model", out var m)) claudeModel = m.GetString() ?? "claude-sonnet-4-20250514";
+                        if (root.TryGetProperty("maxTokens", out var t)) claudeMaxTokens = t.GetInt32();
+                        if (root.TryGetProperty("temperature", out var tp)) claudeTemperature = tp.GetDouble();
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+    }
+
+    private async Task OpenClaudeModal()
+    {
+        showClaudeModal = true;
+        if (claudeHasSecret)
+            await LoadClaudeModels();
+    }
+
+    private void CloseClaudeModal() => showClaudeModal = false;
+
+    private async Task LoadClaudeModels()
+    {
+        loadingClaudeModels = true;
+        claudeModelsError = null;
+        StateHasChanged();
+
+        try
+        {
+            claudeModels = await Api.GetClaudeModelsAsync();
+            if (claudeModels.Count == 0)
+                claudeModelsError = "No se encontraron modelos disponibles para esta API Key";
+        }
+        catch (Exception ex)
+        {
+            claudeModelsError = ex.Message;
+            claudeModels = null;
+        }
+        finally
+        {
+            loadingClaudeModels = false;
+        }
+    }
+
+    private async Task SaveClaude()
+    {
+        claudeSaving = true;
+        try
+        {
+            var settings = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                model = claudeModel,
+                maxTokens = claudeMaxTokens,
+                temperature = claudeTemperature
+            });
+
+            var request = new SaveIntegrationRequest
+            {
+                Provider = "claude",
+                AppId = null,
+                AppSecret = string.IsNullOrWhiteSpace(claudeApiKey) ? null : claudeApiKey,
+                RedirectUrl = null,
+                Settings = settings,
+                IsActive = claudeActive
+            };
+
+            var result = await Api.SaveIntegrationAsync(request);
+            if (result is not null)
+            {
+                claudeId = result.Id;
+                claudeApiKey = "";
+                ToastService.Success("Configuracion de Claude guardada");
+                if (!claudeHasSecret || claudeModels == null)
+                {
+                    claudeHasSecret = result.HasSecret;
+                    await LoadClaudeModels();
+                }
+                else
+                {
+                    showClaudeModal = false;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error al guardar: " + ex.Message);
+        }
+        finally
+        {
+            claudeSaving = false;
+        }
+    }
+
+    private async Task DeleteClaude()
+    {
+        claudeSaving = true;
+        try
+        {
+            var deleted = await Api.DeleteIntegrationAsync("claude");
+            if (deleted)
+            {
+                claudeId = 0;
+                claudeApiKey = "";
+                claudeActive = false;
+                claudeHasSecret = false;
+                claudeModel = "claude-sonnet-4-20250514";
+                claudeMaxTokens = 4096;
+                claudeTemperature = 1.0;
+                claudeModels = null;
+                showClaudeModal = false;
+                ToastService.Success("Integracion de Claude eliminada");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error al eliminar: " + ex.Message);
+        }
+        finally
+        {
+            claudeSaving = false;
         }
     }
 

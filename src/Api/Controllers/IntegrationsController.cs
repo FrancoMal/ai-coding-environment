@@ -89,6 +89,49 @@ public class IntegrationsController : ControllerBase
         }
     }
 
+    [HttpGet("claude/models")]
+    public async Task<IActionResult> GetClaudeModels()
+    {
+        var integration = await _service.GetByProviderAsync("claude");
+        if (integration is null || !integration.HasSecret)
+            return BadRequest(new { error = "No hay API Key de Claude configurada" });
+
+        var secret = await _service.GetSecretAsync("claude");
+        if (string.IsNullOrEmpty(secret))
+            return BadRequest(new { error = "No hay API Key de Claude configurada" });
+
+        try
+        {
+            var http = _httpFactory.CreateClient();
+            http.DefaultRequestHeaders.Add("x-api-key", secret);
+            http.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+            var response = await http.GetAsync("https://api.anthropic.com/v1/models?limit=100");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return BadRequest(new { error = $"Error de Anthropic ({response.StatusCode}): API Key invalida o sin permisos" });
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var doc = System.Text.Json.JsonDocument.Parse(json);
+            var models = new List<object>();
+
+            foreach (var model in doc.RootElement.GetProperty("data").EnumerateArray())
+            {
+                var id = model.GetProperty("id").GetString() ?? "";
+                var displayName = model.TryGetProperty("display_name", out var dn) ? dn.GetString() ?? id : id;
+                models.Add(new { id, displayName });
+            }
+
+            models = models.OrderBy(m => ((dynamic)m).displayName).ToList<object>();
+            return Ok(models);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = "Error al conectar con Anthropic: " + ex.Message });
+        }
+    }
+
     [HttpDelete("{provider}")]
     public async Task<IActionResult> Delete(string provider)
     {

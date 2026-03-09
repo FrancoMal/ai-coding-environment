@@ -1362,6 +1362,12 @@ button {
   color: #2d3277 !important;
 }
 
+.claude-logo {
+  background: linear-gradient(135deg, #d4a574 0%, #c4956a 100%);
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
 .openai-logo {
   background: linear-gradient(135deg, #10a37f 0%, #0d7f6a 100%);
   color: #ffffff !important;

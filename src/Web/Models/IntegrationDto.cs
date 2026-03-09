@@ -47,3 +47,9 @@ public class OpenAiModelDto
 {
     public string Id { get; set; } = string.Empty;
 }
+
+public class ClaudeModelDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+}
