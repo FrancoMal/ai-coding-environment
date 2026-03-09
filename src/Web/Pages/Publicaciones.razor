@@ -585,7 +585,7 @@
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
                         <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label">Precio original (@selectedItem.CurrencyId)</label>
-                            <input type="number" class="form-input" style="font-size: 1.1rem; font-weight: 700;" @bind="editPrice" step="0.01" min="0" />
+                            <input type="text" class="form-input" style="font-size: 1.1rem; font-weight: 700;" value="@editPriceFormatted" @oninput="OnPriceInput" inputmode="decimal" />
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label">Stock</label>
@@ -1666,6 +1666,89 @@
     private string Truncate(string text, int maxLength) =>
         text.Length <= maxLength ? text : text[..maxLength] + "...";
 
+
+    private string FormatPrice(decimal value)
+    {
+        var parts = value.ToString("F2").Split('.');
+        var intPart = parts[0];
+        var decPart = parts.Length > 1 ? parts[1] : "00";
+
+        // Add thousand separators (dots)
+        var chars = intPart.ToCharArray();
+        var formatted = new System.Text.StringBuilder();
+        for (int i = 0; i < chars.Length; i++)
+        {
+            if (i > 0 && (chars.Length - i) % 3 == 0)
+                formatted.Append('.');
+            formatted.Append(chars[i]);
+        }
+        return formatted + "," + decPart;
+    }
+
+    private decimal ParseFormattedPrice(string formatted)
+    {
+        if (string.IsNullOrWhiteSpace(formatted)) return 0;
+        // Remove thousand separators (dots), replace decimal comma with dot
+        var clean = formatted.Replace(".", "").Replace(",", ".");
+        return decimal.TryParse(clean, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var val) ? val : 0;
+    }
+
+    private void OnPriceInput(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString() ?? "";
+
+        // If user typed a dot and there's no comma yet, treat it as decimal separator
+        if (raw.EndsWith(".") && !raw.Contains(','))
+        {
+            raw = raw[..^1] + ",";
+        }
+        // Also handle dot in middle that's clearly a decimal (e.g. user pastes "1234.56")
+        else if (!raw.Contains(',') && raw.Count(c => c == '.') == 1)
+        {
+            var dotIdx = raw.IndexOf('.');
+            var afterDot = raw[(dotIdx + 1)..];
+            if (afterDot.Length <= 2 && afterDot.All(char.IsDigit))
+            {
+                raw = raw[..dotIdx] + "," + afterDot;
+            }
+        }
+
+        // Allow only digits and comma
+        var cleaned = new string(raw.Where(c => char.IsDigit(c) || c == ',').ToArray());
+
+        // Find comma position (decimal separator)
+        var commaIdx = cleaned.IndexOf(',');
+        string intPart, decPart;
+
+        if (commaIdx >= 0)
+        {
+            intPart = cleaned[..commaIdx];
+            decPart = new string(cleaned[(commaIdx + 1)..].Where(char.IsDigit).ToArray());
+            if (decPart.Length > 2) decPart = decPart[..2];
+        }
+        else
+        {
+            intPart = cleaned;
+            decPart = "";
+        }
+
+        // Remove leading zeros
+        intPart = intPart.TrimStart('0');
+        if (string.IsNullOrEmpty(intPart)) intPart = "0";
+
+        // Format integer part with thousand separators (dots)
+        var formatted = new System.Text.StringBuilder();
+        for (int i = 0; i < intPart.Length; i++)
+        {
+            if (i > 0 && (intPart.Length - i) % 3 == 0)
+                formatted.Append('.');
+            formatted.Append(intPart[i]);
+        }
+
+        editPriceFormatted = commaIdx >= 0 ? formatted + "," + decPart : formatted.ToString();
+        editPrice = ParseFormattedPrice(editPriceFormatted);
+    }
+
     // --- Item detail modal ---
     private MeliItemDto? selectedItem;
     private bool showItemModal;
@@ -1673,6 +1756,7 @@
     private string editTitle = "";
     private string editFamilyName = "";
     private decimal editPrice;
+    private string editPriceFormatted = "";
     private int editStock;
     private string editStatus = "";
 
@@ -1687,6 +1771,7 @@
         editTitle = item.Title;
         editFamilyName = item.FamilyName ?? "";
         editPrice = item.OriginalPrice.HasValue && item.OriginalPrice.Value > 0 ? item.OriginalPrice.Value : item.Price;
+        editPriceFormatted = FormatPrice(editPrice);
         editStock = item.AvailableQuantity;
         editStatus = item.Status;
         itemPromotions = null;
@@ -1872,6 +1957,7 @@
                 selectedItem = updated;
                 editTitle = updated.Title;
                 editPrice = updated.Price;
+                editPriceFormatted = FormatPrice(editPrice);
                 editStock = updated.AvailableQuantity;
                 editStatus = updated.Status;
 
