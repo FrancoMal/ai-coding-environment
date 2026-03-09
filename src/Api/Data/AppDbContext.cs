@@ -14,6 +14,8 @@ public class AppDbContext : DbContext
     public DbSet<MeliOrder> MeliOrders => Set<MeliOrder>();
     public DbSet<MeliItem> MeliItems => Set<MeliItem>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<ScheduledProcess> ScheduledProcesses => Set<ScheduledProcess>();
+    public DbSet<ProcessExecutionLog> ProcessExecutionLogs => Set<ProcessExecutionLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -73,6 +75,22 @@ public class AppDbContext : DbContext
         {
             entity.HasIndex(a => new { a.EntityType, a.EntityId });
             entity.HasIndex(a => a.CreatedAt);
+        });
+
+        modelBuilder.Entity<ScheduledProcess>(entity =>
+        {
+            entity.HasIndex(p => p.Code).IsUnique();
+        });
+
+        modelBuilder.Entity<ProcessExecutionLog>(entity =>
+        {
+            entity.HasIndex(l => l.ProcessCode);
+            entity.HasIndex(l => l.StartedAt);
+            entity.HasOne(l => l.Process)
+                  .WithMany()
+                  .HasForeignKey(l => l.ProcessCode)
+                  .HasPrincipalKey(p => p.Code)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

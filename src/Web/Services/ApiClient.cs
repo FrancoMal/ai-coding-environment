@@ -243,6 +243,30 @@ public class ApiClient
         return await GetAsync<MeliOrderDetailResponse>($"/api/meli/orders/pack-detail/{packId}");
     }
 
+    // --- Scheduled Processes ---
+    public async Task<List<ScheduledProcessDto>?> GetScheduledProcessesAsync()
+    {
+        return await GetAsync<List<ScheduledProcessDto>>("/api/scheduled-processes");
+    }
+
+    public async Task<ScheduledProcessDto?> UpdateProcessScheduleAsync(string code, UpdateScheduleRequest request)
+    {
+        return await PutAsync<ScheduledProcessDto>($"/api/scheduled-processes/{code}/schedule", request);
+    }
+
+    public async Task<RunProcessResponse?> RunProcessNowAsync(string code)
+    {
+        return await PostAsync<RunProcessResponse>($"/api/scheduled-processes/{code}/run", new { });
+    }
+
+    public async Task<ProcessLogListResponse?> GetProcessLogsAsync(string? code = null, int page = 1)
+    {
+        var url = code != null
+            ? $"/api/scheduled-processes/{code}/logs?page={page}"
+            : $"/api/scheduled-processes/logs?page={page}";
+        return await GetAsync<ProcessLogListResponse>(url);
+    }
+
     // --- HTTP helpers ---
     private async Task<T?> GetAsync<T>(string url)
     {

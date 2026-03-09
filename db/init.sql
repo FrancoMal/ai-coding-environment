@@ -242,3 +242,60 @@ BEGIN
     ALTER TABLE MeliItems ADD FreeShipping BIT NOT NULL DEFAULT 0;
 END
 GO
+
+-- ScheduledProcesses table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='ScheduledProcesses' AND xtype='U')
+BEGIN
+    CREATE TABLE ScheduledProcesses (
+        Id INT PRIMARY KEY IDENTITY(1,1),
+        Code NVARCHAR(100) NOT NULL UNIQUE,
+        Name NVARCHAR(255) NOT NULL,
+        Description NVARCHAR(500) NULL,
+        TriggerType NVARCHAR(20) NOT NULL DEFAULT 'Interval',
+        IntervalMinutes INT NULL,
+        DailyAtTime NVARCHAR(5) NULL,
+        CronExpression NVARCHAR(100) NULL,
+        IsEnabled BIT NOT NULL DEFAULT 0,
+        LastRunAt DATETIME2 NULL,
+        LastRunStatus NVARCHAR(20) NULL,
+        LastRunDurationMs INT NULL,
+        NextRunAt DATETIME2 NULL,
+        CreatedAt DATETIME2 DEFAULT GETDATE(),
+        UpdatedAt DATETIME2 NULL
+    );
+END
+GO
+
+-- ProcessExecutionLogs table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='ProcessExecutionLogs' AND xtype='U')
+BEGIN
+    CREATE TABLE ProcessExecutionLogs (
+        Id INT PRIMARY KEY IDENTITY(1,1),
+        ProcessCode NVARCHAR(100) NOT NULL,
+        StartedAt DATETIME2 NOT NULL,
+        FinishedAt DATETIME2 NULL,
+        Status NVARCHAR(20) NOT NULL,
+        DurationMs INT NULL,
+        ResultSummary NVARCHAR(MAX) NULL,
+        ErrorMessage NVARCHAR(MAX) NULL,
+        CONSTRAINT FK_ProcessLogs_Process FOREIGN KEY (ProcessCode) REFERENCES ScheduledProcesses(Code) ON DELETE CASCADE
+    );
+    CREATE INDEX IX_ProcessLogs_ProcessCode ON ProcessExecutionLogs (ProcessCode);
+    CREATE INDEX IX_ProcessLogs_StartedAt ON ProcessExecutionLogs (StartedAt DESC);
+END
+GO
+
+-- Seed scheduled processes
+IF NOT EXISTS (SELECT * FROM ScheduledProcesses WHERE Code = 'SyncMeliOrders')
+BEGIN
+    INSERT INTO ScheduledProcesses (Code, Name, Description, TriggerType, IntervalMinutes, IsEnabled)
+    VALUES ('SyncMeliOrders', 'Sincronizar Ordenes', 'Sincroniza las ordenes de MercadoLibre de los ultimos 7 dias', 'Interval', 360, 0);
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM ScheduledProcesses WHERE Code = 'SyncMeliItems')
+BEGIN
+    INSERT INTO ScheduledProcesses (Code, Name, Description, TriggerType, IntervalMinutes, IsEnabled)
+    VALUES ('SyncMeliItems', 'Sincronizar Publicaciones', 'Sincroniza las publicaciones activas de MercadoLibre', 'Interval', 360, 0);
+END
+GO

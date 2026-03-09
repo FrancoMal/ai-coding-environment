@@ -29,6 +29,8 @@
                  IsActive="@IsActive("/publicaciones")" OnClick="@(() => NavigateTo("/publicaciones"))" />
         @if (isAdmin)
         {
+            <NavItem Href="/procesos" Label="Procesos" Icon="@SvgIcons.Timer"
+                     IsActive="@IsActive("/procesos")" OnClick="@(() => NavigateTo("/procesos"))" />
             <NavItem Href="/auditoria" Label="Auditoria" Icon="@SvgIcons.History"
                      IsActive="@IsActive("/auditoria")" OnClick="@(() => NavigateTo("/auditoria"))" />
         }

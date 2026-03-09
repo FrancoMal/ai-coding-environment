@@ -1,0 +1,564 @@
+@page "/procesos"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject ToastService ToastService
+
+<div class="proc-container">
+    <div class="proc-header">
+        <h2>Procesos Programados</h2>
+    </div>
+
+    @if (loading)
+    {
+        <p>Cargando procesos...</p>
+    }
+    else if (processes == null || !processes.Any())
+    {
+        <p>No hay procesos configurados.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Codigo</th>
+                        <th>Programacion</th>
+                        <th>Estado</th>
+                        <th>Ultima Ejecucion</th>
+                        <th>Proxima Ejecucion</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var proc in processes)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@proc.Name</strong>
+                                @if (!string.IsNullOrEmpty(proc.Description))
+                                {
+                                    <br /><small class="text-muted">@proc.Description</small>
+                                }
+                            </td>
+                            <td><code>@proc.Code</code></td>
+                            <td>@FormatSchedule(proc)</td>
+                            <td>
+                                <span class="proc-badge @(proc.IsEnabled ? "proc-badge-enabled" : "proc-badge-disabled")">
+                                    @(proc.IsEnabled ? "Activo" : "Inactivo")
+                                </span>
+                                @if (!string.IsNullOrEmpty(proc.LastRunStatus))
+                                {
+                                    <span class="proc-badge @GetStatusBadgeClass(proc.LastRunStatus)">
+                                        @proc.LastRunStatus
+                                    </span>
+                                }
+                            </td>
+                            <td>
+                                @if (proc.LastRunAt.HasValue)
+                                {
+                                    <span>@proc.LastRunAt.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                                    @if (proc.LastRunDurationMs.HasValue)
+                                    {
+                                        <br /><small class="text-muted">@FormatDuration(proc.LastRunDurationMs.Value)</small>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Nunca</span>
+                                }
+                            </td>
+                            <td>
+                                @if (proc.NextRunAt.HasValue && proc.IsEnabled)
+                                {
+                                    @proc.NextRunAt.Value.ToString("dd/MM/yyyy HH:mm")
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td class="proc-actions">
+                                <button class="btn btn-sm btn-outline" @onclick="() => OpenEditModal(proc)" title="Editar programacion">
+                                    @SvgIcons.Edit
+                                </button>
+                                <button class="btn btn-sm btn-primary" @onclick="() => OpenRunModal(proc)" title="Ejecutar ahora">
+                                    @SvgIcons.Refresh
+                                </button>
+                                <button class="btn btn-sm btn-outline" @onclick="() => OpenLogsModal(proc)" title="Ver historial">
+                                    @SvgIcons.History
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+@* Modal Editar Programacion *@
+@if (showEditModal && editProcess != null)
+{
+    <div class="modal-overlay" @onclick="CloseEditModal">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: whitesmoke;">
+                <h3>Editar Programacion - @editProcess.Name</h3>
+                <button class="modal-close" @onclick="CloseEditModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Tipo de Trigger</label>
+                    <select class="form-control" @bind="editTriggerType">
+                        <option value="Interval">Cada X minutos</option>
+                        <option value="DailyAt">Hora fija diaria</option>
+                    </select>
+                </div>
+
+                @if (editTriggerType == "Interval")
+                {
+                    <div class="form-group">
+                        <label>Intervalo (minutos)</label>
+                        <input type="number" class="form-control" @bind="editIntervalMinutes" min="1" />
+                        <small class="text-muted">
+                            @if (editIntervalMinutes >= 1440)
+                            {
+                                @($"= {editIntervalMinutes / 1440} dia(s)")
+                            }
+                            else if (editIntervalMinutes >= 60)
+                            {
+                                @($"= {editIntervalMinutes / 60} hora(s) {editIntervalMinutes % 60} min")
+                            }
+                        </small>
+                    </div>
+                }
+                else
+                {
+                    <div class="form-group">
+                        <label>Hora de ejecucion (HH:mm)</label>
+                        <input type="text" class="form-control" @bind="editDailyAtTime" placeholder="HH:mm (ej: 08:00)" />
+                    </div>
+                }
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" @bind="editIsEnabled" />
+                        Habilitado
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" @onclick="CloseEditModal">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SaveSchedule" disabled="@saving">
+                    @(saving ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@* Modal Ejecutar Ahora *@
+@if (showRunModal && runProcess != null)
+{
+    <div class="modal-overlay" @onclick="CloseRunModal">
+        <div class="modal-content modal-sm" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: whitesmoke;">
+                <h3>Ejecutar Proceso</h3>
+                <button class="modal-close" @onclick="CloseRunModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Desea ejecutar <strong>@runProcess.Name</strong> ahora?</p>
+                <p class="text-muted">El proceso se ejecutara en segundo plano dentro de los proximos 30 segundos.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" @onclick="CloseRunModal">Cancelar</button>
+                <button class="btn btn-primary" @onclick="RunNow" disabled="@running">
+                    @(running ? "Iniciando..." : "Ejecutar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+@* Modal Historial de Ejecuciones *@
+@if (showLogsModal && logsProcess != null)
+{
+    <div class="modal-overlay" @onclick="CloseLogsModal">
+        <div class="modal-content modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: whitesmoke;">
+                <h3>Historial - @logsProcess.Name</h3>
+                <button class="modal-close" @onclick="CloseLogsModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                @if (logsLoading)
+                {
+                    <p>Cargando historial...</p>
+                }
+                else if (logs == null || !logs.Any())
+                {
+                    <p>No hay ejecuciones registradas.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Inicio</th>
+                                    <th>Fin</th>
+                                    <th>Estado</th>
+                                    <th>Duracion</th>
+                                    <th>Resultado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var log in logs)
+                                {
+                                    <tr>
+                                        <td>@log.StartedAt.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                        <td>@(log.FinishedAt?.ToString("dd/MM/yyyy HH:mm:ss") ?? "-")</td>
+                                        <td>
+                                            <span class="proc-badge @GetStatusBadgeClass(log.Status)">
+                                                @log.Status
+                                            </span>
+                                        </td>
+                                        <td>@(log.DurationMs.HasValue ? FormatDuration(log.DurationMs.Value) : "-")</td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(log.ErrorMessage))
+                                            {
+                                                <span class="text-danger" title="@log.ErrorMessage">
+                                                    @Truncate(log.ErrorMessage, 60)
+                                                </span>
+                                            }
+                                            else if (!string.IsNullOrEmpty(log.ResultSummary))
+                                            {
+                                                <span title="@log.ResultSummary">
+                                                    @Truncate(log.ResultSummary, 60)
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (logsTotalPages > 1)
+                    {
+                        <div class="proc-pagination">
+                            <button class="btn btn-sm btn-outline" disabled="@(logsPage <= 1)" @onclick="() => LoadLogs(logsPage - 1)">Anterior</button>
+                            <span>Pagina @logsPage de @logsTotalPages</span>
+                            <button class="btn btn-sm btn-outline" disabled="@(logsPage >= logsTotalPages)" @onclick="() => LoadLogs(logsPage + 1)">Siguiente</button>
+                        </div>
+                    }
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" @onclick="CloseLogsModal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+}
+<style>
+    .proc-container {
+        padding: 0;
+    }
+    .proc-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+    .proc-header h2 {
+        margin: 0;
+        font-size: 1.4rem;
+    }
+    .proc-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        margin-right: 4px;
+    }
+    .proc-badge-enabled {
+        background: #d4edda;
+        color: #155724;
+    }
+    .proc-badge-disabled {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    .proc-status-success {
+        background: #d4edda;
+        color: #155724;
+    }
+    .proc-status-error {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    .proc-status-running {
+        background: #cce5ff;
+        color: #004085;
+    }
+    .proc-actions {
+        display: flex;
+        gap: 4px;
+    }
+    .proc-actions button {
+        padding: 4px 8px;
+    }
+    .proc-pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    .text-muted {
+        color: #6c757d;
+    }
+    .text-danger {
+        color: #dc3545;
+    }
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+    .modal-sm {
+        max-width: 450px;
+    }
+    .modal-lg {
+        max-width: 900px;
+    }
+</style>
+@code {
+    private List<ScheduledProcessDto>? processes;
+    private bool loading = true;
+
+    // Edit modal
+    private bool showEditModal;
+    private ScheduledProcessDto? editProcess;
+    private string editTriggerType = "Interval";
+    private int editIntervalMinutes = 60;
+    private string editDailyAtTime = "08:00";
+    private bool editIsEnabled;
+    private bool saving;
+
+    // Run modal
+    private bool showRunModal;
+    private ScheduledProcessDto? runProcess;
+    private bool running;
+
+    // Logs modal
+    private bool showLogsModal;
+    private ScheduledProcessDto? logsProcess;
+    private List<ProcessLogDto>? logs;
+    private bool logsLoading;
+    private int logsPage = 1;
+    private int logsTotalPages = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProcesses();
+    }
+
+    private async Task LoadProcesses()
+    {
+        loading = true;
+        try
+        {
+            processes = await Api.GetScheduledProcessesAsync();
+        }
+        catch
+        {
+            ToastService.Error("Error al cargar los procesos");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    // --- Edit Schedule ---
+    private void OpenEditModal(ScheduledProcessDto proc)
+    {
+        editProcess = proc;
+        editTriggerType = proc.TriggerType;
+        editIntervalMinutes = proc.IntervalMinutes ?? 60;
+        editDailyAtTime = proc.DailyAtTime ?? "08:00";
+        editIsEnabled = proc.IsEnabled;
+        showEditModal = true;
+    }
+
+    private void CloseEditModal()
+    {
+        showEditModal = false;
+        editProcess = null;
+    }
+
+    private async Task SaveSchedule()
+    {
+        if (editProcess == null) return;
+        saving = true;
+        try
+        {
+            var request = new UpdateScheduleRequest
+            {
+                TriggerType = editTriggerType,
+                IntervalMinutes = editTriggerType == "Interval" ? editIntervalMinutes : null,
+                DailyAtTime = editTriggerType == "DailyAt" ? editDailyAtTime : null,
+                IsEnabled = editIsEnabled
+            };
+            var result = await Api.UpdateProcessScheduleAsync(editProcess.Code, request);
+            if (result != null)
+            {
+                ToastService.Success("Programacion actualizada");
+                CloseEditModal();
+                await LoadProcesses();
+            }
+            else
+            {
+                ToastService.Error("Error al guardar");
+            }
+        }
+        catch
+        {
+            ToastService.Error("Error al guardar la programacion");
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+    // --- Run Now ---
+    private void OpenRunModal(ScheduledProcessDto proc)
+    {
+        runProcess = proc;
+        showRunModal = true;
+    }
+
+    private void CloseRunModal()
+    {
+        showRunModal = false;
+        runProcess = null;
+    }
+
+    private async Task RunNow()
+    {
+        if (runProcess == null) return;
+        running = true;
+        try
+        {
+            var result = await Api.RunProcessNowAsync(runProcess.Code);
+            if (result != null && result.Started)
+            {
+                ToastService.Success(result.Message ?? "Proceso iniciado");
+                CloseRunModal();
+                await LoadProcesses();
+            }
+            else
+            {
+                ToastService.Error(result?.Message ?? "Error al ejecutar");
+            }
+        }
+        catch
+        {
+            ToastService.Error("Error al ejecutar el proceso");
+        }
+        finally
+        {
+            running = false;
+        }
+    }
+
+    // --- Logs ---
+    private async Task OpenLogsModal(ScheduledProcessDto proc)
+    {
+        logsProcess = proc;
+        showLogsModal = true;
+        logsPage = 1;
+        await LoadLogs(1);
+    }
+
+    private void CloseLogsModal()
+    {
+        showLogsModal = false;
+        logsProcess = null;
+        logs = null;
+    }
+
+    private async Task LoadLogs(int page)
+    {
+        if (logsProcess == null) return;
+        logsLoading = true;
+        logsPage = page;
+        try
+        {
+            var response = await Api.GetProcessLogsAsync(logsProcess.Code, page);
+            if (response != null)
+            {
+                logs = response.Logs;
+                logsTotalPages = (int)Math.Ceiling((double)response.Total / response.PageSize);
+            }
+        }
+        catch
+        {
+            ToastService.Error("Error al cargar el historial");
+        }
+        finally
+        {
+            logsLoading = false;
+        }
+    }
+    // --- Helpers ---
+    private string FormatSchedule(ScheduledProcessDto proc)
+    {
+        if (proc.TriggerType == "Interval" && proc.IntervalMinutes.HasValue)
+        {
+            var mins = proc.IntervalMinutes.Value;
+            if (mins >= 1440)
+                return $"Cada {mins / 1440} dia(s)";
+            if (mins >= 60)
+                return $"Cada {mins / 60}h {mins % 60}m";
+            return $"Cada {mins} min";
+        }
+        if (proc.TriggerType == "DailyAt" && !string.IsNullOrEmpty(proc.DailyAtTime))
+        {
+            return $"Diario a las {proc.DailyAtTime}";
+        }
+        return "Sin programar";
+    }
+
+    private string GetStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Success" => "proc-status-success",
+            "Error" => "proc-status-error",
+            "Running" => "proc-status-running",
+            _ => ""
+        };
+    }
+
+    private string FormatDuration(int ms)
+    {
+        if (ms < 1000)
+            return $"{ms}ms";
+        if (ms < 60000)
+            return $"{ms / 1000.0:F1}s";
+        return $"{ms / 60000}m {(ms % 60000) / 1000}s";
+    }
+
+    private string Truncate(string text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
+            return text;
+        return text.Substring(0, maxLength) + "...";
+    }
+}

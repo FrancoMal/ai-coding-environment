@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Api.BackgroundJobs;
 using Api.Data;
 using Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -50,6 +51,12 @@ builder.Services.AddScoped<MeliAccountService>();
 builder.Services.AddScoped<MeliOrderService>();
 builder.Services.AddScoped<MeliItemService>();
 builder.Services.AddScoped<AuditLogService>();
+builder.Services.AddScoped<ScheduledProcessService>();
+
+// Background Jobs
+builder.Services.AddSingleton<IScheduledJob, SyncMeliOrdersJob>();
+builder.Services.AddSingleton<IScheduledJob, SyncMeliItemsJob>();
+builder.Services.AddHostedService<ProcessSchedulerService>();
 
 // CORS
 builder.Services.AddCors(options =>
