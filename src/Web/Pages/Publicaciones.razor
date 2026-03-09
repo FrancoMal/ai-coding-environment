@@ -554,7 +554,7 @@
                                 <div class="cost-line-items">
                                     <div class="cost-line">
                                         <span class="cost-line-label">Cargo por vender</span>
-                                        <span class="cost-line-amount negative">-$ @itemCosts.SaleFeeAmount.ToString("N2", argCulture)</span>
+                                        <span class="cost-line-amount negative">-$ @((itemCosts.SaleFeeAmount - itemCosts.FixedFee).ToString("N2", argCulture))</span>
                                     </div>
                                     <div class="cost-line">
                                         <span class="cost-line-label">Costo fijo</span>
