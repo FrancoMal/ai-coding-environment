@@ -140,6 +140,15 @@ public class MeliAccountService
         var account = await _db.MeliAccounts.FindAsync(id);
         if (account is null) return false;
 
+        // Eliminar ordenes asociadas
+        var orders = await _db.MeliOrders.Where(o => o.MeliAccountId == id).ToListAsync();
+        if (orders.Any()) _db.MeliOrders.RemoveRange(orders);
+
+        // Eliminar publicaciones asociadas
+        var items = await _db.MeliItems.Where(i => i.MeliAccountId == id).ToListAsync();
+        if (items.Any()) _db.MeliItems.RemoveRange(items);
+
+        // Eliminar la cuenta
         _db.MeliAccounts.Remove(account);
         await _db.SaveChangesAsync();
         return true;
