@@ -18,7 +18,7 @@ public class IntegrationService
             .Select(i => new IntegrationDto(
                 i.Id, i.Provider, i.AppId,
                 !string.IsNullOrEmpty(i.AppSecret),
-                i.RedirectUrl, i.IsActive,
+                i.RedirectUrl, i.Settings, i.IsActive,
                 i.CreatedAt, i.UpdatedAt))
             .ToListAsync();
     }
@@ -33,7 +33,7 @@ public class IntegrationService
         return new IntegrationDto(
             i.Id, i.Provider, i.AppId,
             !string.IsNullOrEmpty(i.AppSecret),
-            i.RedirectUrl, i.IsActive,
+            i.RedirectUrl, i.Settings, i.IsActive,
             i.CreatedAt, i.UpdatedAt);
     }
 
@@ -48,6 +48,7 @@ public class IntegrationService
             if (!string.IsNullOrEmpty(request.AppSecret))
                 existing.AppSecret = request.AppSecret;
             existing.RedirectUrl = request.RedirectUrl;
+            existing.Settings = request.Settings;
             existing.IsActive = request.IsActive;
             existing.UpdatedAt = DateTime.UtcNow;
         }
@@ -59,6 +60,7 @@ public class IntegrationService
                 AppId = request.AppId,
                 AppSecret = request.AppSecret,
                 RedirectUrl = request.RedirectUrl,
+                Settings = request.Settings,
                 IsActive = request.IsActive
             };
             _db.Integrations.Add(existing);
@@ -69,7 +71,7 @@ public class IntegrationService
         return new IntegrationDto(
             existing.Id, existing.Provider, existing.AppId,
             !string.IsNullOrEmpty(existing.AppSecret),
-            existing.RedirectUrl, existing.IsActive,
+            existing.RedirectUrl, existing.Settings, existing.IsActive,
             existing.CreatedAt, existing.UpdatedAt);
     }
 

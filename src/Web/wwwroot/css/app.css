@@ -1362,6 +1362,19 @@ button {
   color: #2d3277 !important;
 }
 
+.openai-logo {
+  background: linear-gradient(135deg, #10a37f 0%, #0d7f6a 100%);
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
+.form-range {
+  width: 100%;
+  height: 6px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
 .integration-info {
   flex: 1;
 }

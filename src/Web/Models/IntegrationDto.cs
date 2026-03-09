@@ -7,6 +7,7 @@ public class IntegrationDto
     public string? AppId { get; set; }
     public bool HasSecret { get; set; }
     public string? RedirectUrl { get; set; }
+    public string? Settings { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -18,6 +19,7 @@ public class SaveIntegrationRequest
     public string? AppId { get; set; }
     public string? AppSecret { get; set; }
     public string? RedirectUrl { get; set; }
+    public string? Settings { get; set; }
     public bool IsActive { get; set; }
 }
 

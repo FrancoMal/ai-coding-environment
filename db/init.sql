@@ -90,6 +90,7 @@ BEGIN
         AppId NVARCHAR(255) NULL,
         AppSecret NVARCHAR(255) NULL,
         RedirectUrl NVARCHAR(500) NULL,
+    Settings NVARCHAR(MAX) NULL,
         IsActive BIT DEFAULT 0,
         CreatedAt DATETIME2 DEFAULT GETDATE(),
         UpdatedAt DATETIME2 NULL

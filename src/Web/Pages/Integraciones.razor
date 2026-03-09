@@ -122,6 +122,54 @@
             </div>
         }
     </div>
+    <!-- OpenAI -->
+    <div class="integration-card @(openaiActive ? "integration-active" : "")">
+        <div class="integration-card-header">
+            <div class="integration-logo">
+                <span class="integration-logo-icon openai-logo">AI</span>
+            </div>
+            <div class="integration-info">
+                <h3>OpenAI</h3>
+                <p>Conecta tu API Key de OpenAI para usar modelos GPT en otras funciones del programa.</p>
+            </div>
+            <div class="integration-header-actions">
+                <span class="status-badge @(openaiActive ? "status-active" : "status-inactive")">
+                    @(openaiActive ? "Activa" : "Inactiva")
+                </span>
+                <button class="btn btn-secondary btn-sm" @onclick="OpenOpenAiModal">Configurar</button>
+            </div>
+        </div>
+
+        @if (openaiId > 0 && openaiActive)
+        {
+            <div class="integration-accounts" style="padding: 1rem 1.5rem;">
+                <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                    <div>
+                        <small class="text-muted">Modelo</small>
+                        <div><strong>@openaiModel</strong></div>
+                    </div>
+                    <div>
+                        <small class="text-muted">Max Tokens</small>
+                        <div><strong>@openaiMaxTokens</strong></div>
+                    </div>
+                    <div>
+                        <small class="text-muted">Temperatura</small>
+                        <div><strong>@openaiTemperature.ToString("F1")</strong></div>
+                    </div>
+                    <div>
+                        <small class="text-muted">API Key</small>
+                        <div><strong>@(openaiHasSecret ? "Configurada" : "No configurada")</strong></div>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (openaiId == 0)
+        {
+            <div style="padding: 1rem 1.5rem;">
+                <p class="text-muted">Configura tu API Key de OpenAI para habilitar las funciones de inteligencia artificial.</p>
+            </div>
+        }
+    </div>
 </div>
 
 <!-- Modal: Configuracion MercadoLibre -->
@@ -180,6 +228,75 @@
                 <button class="btn btn-secondary" @onclick="CloseConfigModal">Cancelar</button>
                 <button class="btn btn-primary" @onclick="SaveMercadoLibre" disabled="@saving">
                     @(saving ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: Configuracion OpenAI -->
+@if (showOpenaiModal)
+{
+    <div class="modal-overlay" @onclick="CloseOpenAiModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Configuracion de OpenAI</h3>
+                <button class="btn-close" @onclick="CloseOpenAiModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <div class="input-with-hint">
+                        <input type="password" class="form-input" @bind="openaiApiKey"
+                               placeholder="@(openaiHasSecret ? "Ya configurada" : "sk-...")" />
+                        @if (openaiHasSecret)
+                        {
+                            <span class="input-hint">Deja en blanco para mantener la actual</span>
+                        }
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Modelo</label>
+                    <select class="form-input" @bind="openaiModel">
+                        <option value="gpt-4o">GPT-4o</option>
+                        <option value="gpt-4o-mini">GPT-4o Mini</option>
+                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                        <option value="gpt-4">GPT-4</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        <option value="o1">O1</option>
+                        <option value="o1-mini">O1 Mini</option>
+                        <option value="o3-mini">O3 Mini</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Temperatura: <strong>@openaiTemperature.ToString("F1")</strong></label>
+                    <input type="range" class="form-range" min="0" max="2" step="0.1" @bind="openaiTemperature" @bind:event="oninput" />
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);">
+                        <span>Preciso (0)</span>
+                        <span>Creativo (2)</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Max Tokens</label>
+                    <input type="number" class="form-input" @bind="openaiMaxTokens" min="1" max="128000" />
+                    <span class="input-hint">Maximo de tokens que puede generar el modelo en una respuesta</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">
+                        <input type="checkbox" @bind="openaiActive" /> Integracion activa
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                @if (openaiId > 0)
+                {
+                    <button class="btn btn-danger" @onclick="DeleteOpenAi" disabled="@openaiSaving">
+                        Eliminar
+                    </button>
+                }
+                <button class="btn btn-secondary" @onclick="CloseOpenAiModal">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SaveOpenAi" disabled="@openaiSaving">
+                    @(openaiSaving ? "Guardando..." : "Guardar")
                 </button>
             </div>
         </div>
@@ -251,6 +368,17 @@
     private bool saving;
     private bool showConfigModal;
 
+    // OpenAI config fields
+    private int openaiId;
+    private string openaiApiKey = "";
+    private bool openaiActive;
+    private bool openaiHasSecret;
+    private string openaiModel = "gpt-4o";
+    private int openaiMaxTokens = 4096;
+    private double openaiTemperature = 0.7;
+    private bool showOpenaiModal;
+    private bool openaiSaving;
+
     // Accounts
     private List<MeliAccountDto>? accounts;
     private bool connecting;
@@ -270,6 +398,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadMercadoLibre();
+        await LoadOpenAi();
         await LoadAccounts();
     }
 
@@ -299,7 +428,110 @@
         catch { accounts = new(); }
     }
 
-    private void OpenConfigModal()
+    // --- OpenAI Methods ---
+    private async Task LoadOpenAi()
+    {
+        try
+        {
+            var integration = await Api.GetIntegrationAsync("openai");
+            if (integration is not null)
+            {
+                openaiId = integration.Id;
+                openaiActive = integration.IsActive;
+                openaiHasSecret = integration.HasSecret;
+                if (!string.IsNullOrEmpty(integration.Settings))
+                {
+                    try
+                    {
+                        var doc = System.Text.Json.JsonDocument.Parse(integration.Settings);
+                        var root = doc.RootElement;
+                        if (root.TryGetProperty("model", out var m)) openaiModel = m.GetString() ?? "gpt-4o";
+                        if (root.TryGetProperty("maxTokens", out var t)) openaiMaxTokens = t.GetInt32();
+                        if (root.TryGetProperty("temperature", out var tp)) openaiTemperature = tp.GetDouble();
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+    }
+
+    private void OpenOpenAiModal() => showOpenaiModal = true;
+
+    private void CloseOpenAiModal() => showOpenaiModal = false;
+
+    private async Task SaveOpenAi()
+    {
+        openaiSaving = true;
+        try
+        {
+            var settings = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                model = openaiModel,
+                maxTokens = openaiMaxTokens,
+                temperature = openaiTemperature
+            });
+
+            var request = new SaveIntegrationRequest
+            {
+                Provider = "openai",
+                AppId = null,
+                AppSecret = string.IsNullOrWhiteSpace(openaiApiKey) ? null : openaiApiKey,
+                RedirectUrl = null,
+                Settings = settings,
+                IsActive = openaiActive
+            };
+
+            var result = await Api.SaveIntegrationAsync(request);
+            if (result is not null)
+            {
+                openaiId = result.Id;
+                openaiHasSecret = result.HasSecret;
+                openaiApiKey = "";
+                showOpenaiModal = false;
+                ToastService.Success("Configuracion de OpenAI guardada");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error al guardar: " + ex.Message);
+        }
+        finally
+        {
+            openaiSaving = false;
+        }
+    }
+
+    private async Task DeleteOpenAi()
+    {
+        openaiSaving = true;
+        try
+        {
+            var deleted = await Api.DeleteIntegrationAsync("openai");
+            if (deleted)
+            {
+                openaiId = 0;
+                openaiApiKey = "";
+                openaiActive = false;
+                openaiHasSecret = false;
+                openaiModel = "gpt-4o";
+                openaiMaxTokens = 4096;
+                openaiTemperature = 0.7;
+                showOpenaiModal = false;
+                ToastService.Success("Integracion de OpenAI eliminada");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error al eliminar: " + ex.Message);
+        }
+        finally
+        {
+            openaiSaving = false;
+        }
+    }
+
+        private void OpenConfigModal()
     {
         mlError = null;
         mlSaved = false;

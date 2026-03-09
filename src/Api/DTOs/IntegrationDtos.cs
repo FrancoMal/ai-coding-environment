@@ -8,6 +8,7 @@ public record IntegrationDto(
     string? AppId,
     bool HasSecret,
     string? RedirectUrl,
+    string? Settings,
     bool IsActive,
     DateTime CreatedAt,
     DateTime? UpdatedAt
@@ -18,5 +19,6 @@ public record SaveIntegrationRequest(
     [MaxLength(255)] string? AppId,
     [MaxLength(255)] string? AppSecret,
     [MaxLength(500)] string? RedirectUrl,
+    string? Settings,
     bool IsActive
 );
