@@ -508,29 +508,88 @@
                         @selectedItem.Title
                     </div>
                 </div>
-                <!-- Read-only info -->
-                <div class="detail-section">
-                    <h4>Informacion</h4>
-                    <div class="detail-info-grid">
-                        <div class="detail-info-item">
-                            <span class="detail-label">SKU</span>
-                            <span class="detail-value">@(selectedItem.Sku ?? "-")</span>
+                <!-- Info + Cost Simulator side by side -->
+                <div class="info-costs-row">
+                    <div class="info-costs-left">
+                        <div class="detail-section" style="margin-bottom: 0;">
+                            <h4>Informacion</h4>
+                            <div class="detail-info-grid">
+                                <div class="detail-info-item">
+                                    <span class="detail-label">SKU</span>
+                                    <span class="detail-value">@(selectedItem.Sku ?? "-")</span>
+                                </div>
+                                <div class="detail-info-item">
+                                    <span class="detail-label">Vendidos</span>
+                                    <span class="detail-value">@selectedItem.SoldQuantity</span>
+                                </div>
+                                <div class="detail-info-item">
+                                    <span class="detail-label">Tipo publicacion</span>
+                                    <span class="detail-value">@GetListingTypeLabel(selectedItem.ListingTypeId) @GetInstallmentLabel(selectedItem.ListingTypeId, selectedItem.InstallmentTag)</span>
+                                </div>
+                                <div class="detail-info-item">
+                                    <span class="detail-label">Creada</span>
+                                    <span class="detail-value">@(selectedItem.DateCreated?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
+                                </div>
+                                <div class="detail-info-item">
+                                    <span class="detail-label">Ultima actualizacion</span>
+                                    <span class="detail-value">@(selectedItem.LastUpdated?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="detail-info-item">
-                            <span class="detail-label">Vendidos</span>
-                            <span class="detail-value">@selectedItem.SoldQuantity</span>
-                        </div>
-                        <div class="detail-info-item">
-                            <span class="detail-label">Tipo publicacion</span>
-                            <span class="detail-value">@GetListingTypeLabel(selectedItem.ListingTypeId) @GetInstallmentLabel(selectedItem.ListingTypeId, selectedItem.InstallmentTag)</span>
-                        </div>
-                        <div class="detail-info-item">
-                            <span class="detail-label">Creada</span>
-                            <span class="detail-value">@(selectedItem.DateCreated?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
-                        </div>
-                        <div class="detail-info-item">
-                            <span class="detail-label">Ultima actualizacion</span>
-                            <span class="detail-value">@(selectedItem.LastUpdated?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
+                    </div>
+                    <div class="info-costs-right">
+                        <div class="cost-simulator">
+                            <h4>Simulador de costos</h4>
+                            @if (isLoadingCosts)
+                            {
+                                <div class="cost-loading"><span>Calculando costos...</span></div>
+                            }
+                            else if (itemCosts is not null)
+                            {
+                                <div class="cost-price-box">
+                                    <span class="cost-price-label">Precio</span>
+                                    <span class="cost-price-value">$ @itemCosts.Price.ToString("N2", argCulture)</span>
+                                </div>
+                                <div class="cost-line-items">
+                                    <div class="cost-line">
+                                        <span class="cost-line-label">Cargo por vender</span>
+                                        <span class="cost-line-amount negative">-$ @itemCosts.SaleFeeAmount.ToString("N2", argCulture)</span>
+                                    </div>
+                                    <div class="cost-line">
+                                        <span class="cost-line-label">Costo fijo</span>
+                                        <span class="cost-line-amount negative">-$ @itemCosts.FixedFee.ToString("N2", argCulture)</span>
+                                    </div>
+                                    <div class="cost-line">
+                                        <div>
+                                            <span class="cost-line-label">Costo por ofrecer cuotas</span>
+                                            @if (itemCosts.FinancingFee == 0)
+                                            {
+                                                <div class="cost-line-sub">Sin cuotas agregadas</div>
+                                            }
+                                        </div>
+                                        <span class="cost-line-amount">$ @itemCosts.FinancingFee.ToString("N2", argCulture)</span>
+                                    </div>
+                                    <div class="cost-line">
+                                        <div>
+                                            <span class="cost-line-label">Costo por envio</span>
+                                            <div class="cost-line-sub">Envios de Mercado Libre</div>
+                                        </div>
+                                        <span class="cost-line-amount">$ @itemCosts.ShippingCost.ToString("N2", argCulture)</span>
+                                    </div>
+                                    <div class="cost-line">
+                                        <span class="cost-line-label">Impuestos estimados*</span>
+                                        <span class="cost-line-amount negative">-$ @itemCosts.TaxesEstimated.ToString("N2", argCulture)</span>
+                                    </div>
+                                </div>
+                                <div class="cost-total">
+                                    <span class="cost-total-label">Recibis</span>
+                                    <span class="cost-total-value">$ @itemCosts.NetAmount.ToString("N2", argCulture)</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="cost-loading"><span>No se pudieron obtener los costos</span></div>
+                            }
                         </div>
                     </div>
                 </div>
@@ -917,6 +976,104 @@
     }
     .item-detail-link:hover {
         text-decoration: underline;
+    }
+
+    /* Info + Cost Simulator layout */
+    .info-costs-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    .info-costs-left {
+        min-width: 0;
+    }
+    .info-costs-right {
+        min-width: 0;
+    }
+    .cost-simulator {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 0.75rem;
+    }
+    .cost-simulator h4 {
+        font-size: 0.85rem;
+        color: #374151;
+        margin: 0 0 0.5rem 0;
+        padding-bottom: 0.35rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .cost-price-box {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        margin-bottom: 0.75rem;
+    }
+    .cost-price-label {
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+    .cost-price-value {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1f2937;
+    }
+    .cost-line-items {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 0.5rem;
+    }
+    .cost-line {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        font-size: 0.8rem;
+    }
+    .cost-line-label {
+        color: #374151;
+    }
+    .cost-line-sub {
+        font-size: 0.7rem;
+        color: #3b82f6;
+        margin-top: 1px;
+    }
+    .cost-line-amount {
+        color: #374151;
+        font-weight: 500;
+        white-space: nowrap;
+        margin-left: 0.5rem;
+    }
+    .cost-line-amount.negative {
+        color: #374151;
+    }
+    .cost-total {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .cost-total-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #374151;
+    }
+    .cost-total-value {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1f2937;
+    }
+    .cost-loading {
+        text-align: center;
+        padding: 1rem;
+        color: #9ca3af;
+        font-size: 0.8rem;
     }
 
     /* Detail sections */
@@ -1765,6 +1922,11 @@
     private bool isLoadingPromotions;
     private bool showOtherCampaigns;
 
+    // Cost simulator
+    private ListingCostDto? itemCosts;
+    private bool isLoadingCosts;
+    private static readonly System.Globalization.CultureInfo argCulture = new("es-AR");
+
     private async void OpenItemModal(MeliItemDto item)
     {
         selectedItem = item;
@@ -1777,6 +1939,8 @@
         itemPromotions = null;
         isLoadingPromotions = false;
         showOtherCampaigns = false;
+        itemCosts = null;
+        isLoadingCosts = false;
         showItemModal = true;
         StateHasChanged();
 
@@ -1796,6 +1960,20 @@
             isLoadingPromotions = false;
             StateHasChanged();
         }
+
+        // Load cost simulator
+        isLoadingCosts = true;
+        StateHasChanged();
+        try
+        {
+            itemCosts = await Api.GetItemCostsAsync(item.MeliItemId);
+        }
+        catch
+        {
+            itemCosts = null;
+        }
+        isLoadingCosts = false;
+        StateHasChanged();
     }
 
     private string GetPromoTypeLabel(string type) => type switch

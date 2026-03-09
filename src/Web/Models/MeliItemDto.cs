@@ -62,3 +62,19 @@ public class ItemPromotionDto
     public decimal? PromotionPrice { get; set; }
     public decimal? OriginalPrice { get; set; }
 }
+
+public class ListingCostDto
+{
+    public decimal Price { get; set; }
+    public string CurrencyId { get; set; } = "ARS";
+    public string? ListingTypeId { get; set; }
+    public string? ListingTypeName { get; set; }
+    public decimal SaleFeeAmount { get; set; }
+    public decimal ListingFeeAmount { get; set; }
+    public decimal FixedFee { get; set; }
+    public decimal PercentageFee { get; set; }
+    public decimal FinancingFee { get; set; }
+    public decimal ShippingCost { get; set; }
+    public decimal TaxesEstimated { get; set; }
+    public decimal NetAmount { get; set; }
+}

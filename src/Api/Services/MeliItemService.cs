@@ -665,4 +665,110 @@ public class MeliItemService
 
         return 1;
     }
+
+    public async Task<ListingCostDto> GetListingCostsAsync(string meliItemId)
+    {
+        var item = await _db.MeliItems
+            .Include(i => i.MeliAccount)
+            .FirstOrDefaultAsync(i => i.MeliItemId == meliItemId);
+
+        if (item is null)
+            throw new Exception("Item no encontrado en la base de datos");
+
+        if (item.MeliAccount is null)
+            throw new Exception("Cuenta de MeLi no encontrada");
+
+        var token = await _accountService.GetValidTokenAsync(item.MeliAccount);
+        var http = _httpFactory.CreateClient();
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var price = item.OriginalPrice.HasValue && item.OriginalPrice.Value > 0
+            ? item.OriginalPrice.Value
+            : item.Price;
+
+        // Build query params
+        var queryParams = $"price={price.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        if (!string.IsNullOrEmpty(item.CategoryId))
+            queryParams += $"&category_id={item.CategoryId}";
+        if (!string.IsNullOrEmpty(item.ListingTypeId))
+            queryParams += $"&listing_type_id={item.ListingTypeId}";
+
+        var url = $"https://api.mercadolibre.com/sites/MLA/listing_prices?{queryParams}";
+        var resp = await http.GetAsync(url);
+
+        var result = new ListingCostDto
+        {
+            Price = price,
+            CurrencyId = item.CurrencyId ?? "ARS",
+            ListingTypeId = item.ListingTypeId
+        };
+
+        if (resp.IsSuccessStatusCode)
+        {
+            var json = await resp.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+
+            // The response may be an array (one entry per listing type) or a single object
+            JsonElement root;
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                // Find the matching listing type
+                root = doc.RootElement.EnumerateArray()
+                    .FirstOrDefault(e => e.TryGetProperty("listing_type_id", out var lt)
+                        && lt.GetString() == item.ListingTypeId);
+                if (root.ValueKind == JsonValueKind.Undefined)
+                    root = doc.RootElement[0]; // fallback to first
+            }
+            else
+            {
+                root = doc.RootElement;
+            }
+
+            result.SaleFeeAmount = root.TryGetProperty("sale_fee_amount", out var sfa) && sfa.ValueKind == JsonValueKind.Number
+                ? sfa.GetDecimal() : 0;
+            result.ListingFeeAmount = root.TryGetProperty("listing_fee_amount", out var lfa) && lfa.ValueKind == JsonValueKind.Number
+                ? lfa.GetDecimal() : 0;
+            result.ListingTypeName = root.TryGetProperty("listing_type_name", out var ltn)
+                ? ltn.GetString() : null;
+
+            if (root.TryGetProperty("sale_fee_details", out var sfd))
+            {
+                result.FixedFee = sfd.TryGetProperty("fixed_fee", out var ff) && ff.ValueKind == JsonValueKind.Number
+                    ? ff.GetDecimal() : 0;
+                result.PercentageFee = sfd.TryGetProperty("percentage_fee", out var pf) && pf.ValueKind == JsonValueKind.Number
+                    ? pf.GetDecimal() : 0;
+                result.FinancingFee = sfd.TryGetProperty("financing_add_on_fee", out var faf) && faf.ValueKind == JsonValueKind.Number
+                    ? faf.GetDecimal() : 0;
+            }
+        }
+
+        // Step 2: Get shipping costs
+        try
+        {
+            var userId = item.MeliAccount.MeliUserId;
+            var shippingUrl = $"https://api.mercadolibre.com/users/{userId}/shipping_options/free?item_id={meliItemId}&item_price={price.ToString(System.Globalization.CultureInfo.InvariantCulture)}&free_shipping=true&listing_type_id={item.ListingTypeId}";
+            var shippingResp = await http.GetAsync(shippingUrl);
+            if (shippingResp.IsSuccessStatusCode)
+            {
+                var shippingJson = await shippingResp.Content.ReadAsStringAsync();
+                using var shippingDoc = JsonDocument.Parse(shippingJson);
+                if (shippingDoc.RootElement.TryGetProperty("coverage", out var coverage)
+                    && coverage.TryGetProperty("all_country", out var allCountry)
+                    && allCountry.TryGetProperty("list_cost", out var listCost)
+                    && listCost.ValueKind == JsonValueKind.Number)
+                {
+                    result.ShippingCost = listCost.GetDecimal();
+                }
+            }
+        }
+        catch { /* Shipping cost is optional */ }
+
+        // Taxes estimated (simplified: IVA 21% on sale_fee)
+        result.TaxesEstimated = Math.Round(result.SaleFeeAmount * 0.21m, 2);
+
+        // Net amount = price - sale_fee - listing_fee - taxes
+        result.NetAmount = Math.Round(price - result.SaleFeeAmount - result.ListingFeeAmount - result.ShippingCost - result.TaxesEstimated, 2);
+
+        return result;
+    }
 }

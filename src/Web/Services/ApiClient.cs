@@ -183,6 +183,18 @@ public class ApiClient
         return await GetAsync<List<ItemPromotionDto>>($"/api/meli/items/{meliItemId}/promotions");
     }
 
+    public async Task<ListingCostDto?> GetItemCostsAsync(string meliItemId)
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<ListingCostDto>($"api/meli/items/{meliItemId}/costs");
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public async Task<MeliItemDto?> UpdateMeliItemAsync(string meliItemId, UpdateMeliItemRequest request)
     {
         await SetAuthHeaderAsync();

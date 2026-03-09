@@ -186,4 +186,18 @@ public class MeliController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    [HttpGet("items/{meliItemId}/costs")]
+    public async Task<IActionResult> GetItemCosts(string meliItemId)
+    {
+        try
+        {
+            var result = await _itemService.GetListingCostsAsync(meliItemId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }
