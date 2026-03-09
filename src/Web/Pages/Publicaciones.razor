@@ -6,7 +6,7 @@
 
 <div class="card">
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-        <h3>Publicaciones de MercadoLibre (@GetFilteredAndSortedItems().Count de @totalItems)</h3>
+        <h3>Publicaciones de MercadoLibre (@GetCachedFilteredItems().Count de @totalItems)</h3>
         <div class="sync-dropdown-wrapper">
             <button class="btn btn-primary" @onclick="() => SyncItems(null, null)" disabled="@isSyncing" style="border-radius: 6px 0 0 6px;">
                 @(isSyncing ? syncingLabel : "Sincronizar")
@@ -67,7 +67,7 @@
                     <button class="view-mode-btn @(viewMode == "product" ? "active" : "")" @onclick='() => viewMode = "product"'>Por Producto</button>
                 </div>
                 <button class="promo-filter-btn @(filterPromo ? "active" : "")" @onclick="TogglePromoFilter" title="Filtrar publicaciones en promocion">
-                    🏷️ En promocion @(filterPromo ? $"({GetFilteredAndSortedItems().Count})" : "")
+                    🏷️ En promocion @(filterPromo ? $"({GetCachedFilteredItems().Count})" : "")
                 </button>
             </div>
 
@@ -236,8 +236,7 @@
                     <tbody>
                         @if (viewMode == "flat")
                         {
-                            @foreach (var item in GetFilteredAndSortedItems())
-                            {
+                            <Virtualize Items="@GetCachedFilteredItems()" Context="item" OverscanCount="5" ItemSize="50">
                                 <tr class="clickable-row" @onclick="() => OpenItemModal(item)">
                                     <td style="text-align: center;">
                                         @if (!string.IsNullOrEmpty(item.Thumbnail))
@@ -281,7 +280,7 @@
                                     <td>@GetListingTypeLabel(item.ListingTypeId)</td>
                                     <td>@item.AccountNickname</td>
                                 </tr>
-                            }
+                            </Virtualize>
                         }
                         else if (viewMode == "family")
                         {
@@ -527,12 +526,12 @@
                                     <span class="detail-label">Tipo publicacion</span>
                                     <span class="detail-value">@GetListingTypeLabel(selectedItem.ListingTypeId) @GetInstallmentLabel(selectedItem.ListingTypeId, selectedItem.InstallmentTag)</span>
                                 </div>
-                                <div class="detail-info-item">
+                                <div class="detail-info-item" style="grid-column: 1 / -1;">
                                     <span class="detail-label">Creada</span>
                                     <span class="detail-value">@(selectedItem.DateCreated?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
                                 </div>
-                                <div class="detail-info-item">
-                                    <span class="detail-label">Ultima actualizacion</span>
+                                <div class="detail-info-item" style="grid-column: 1 / -1;">
+                                    <span class="detail-label">Modificada</span>
                                     <span class="detail-value">@(selectedItem.LastUpdated?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</span>
                                 </div>
                             </div>
@@ -1532,6 +1531,8 @@
     private bool isLoading = true;
     private bool isSyncing;
     private int totalItems;
+    private List<MeliItemDto>? _cachedFiltered;
+    private bool _filterDirty = true;
     private string syncingLabel = "Sincronizando...";
 
     // Sync dropdown
@@ -1545,6 +1546,7 @@
     private void TogglePromoFilter()
     {
         filterPromo = !filterPromo;
+        InvalidateFilterCache();
     }
 
     // Sort state
@@ -1579,6 +1581,7 @@
             {
                 items = response.Items;
                 totalItems = response.Total;
+                InvalidateFilterCache();
             }
         }
         catch
@@ -1644,12 +1647,14 @@
             sortColumn = column;
             sortAsc = true;
         }
+        InvalidateFilterCache();
     }
 
     // --- Text Filters ---
     private void SetTextFilter(string column, string value)
     {
         textFilters[column] = value;
+        InvalidateFilterCache();
     }
 
     private string GetTextFilter(string column)
@@ -1677,6 +1682,7 @@
             checkboxFilters[column] = new HashSet<string>();
         if (!checkboxFilters[column].Remove(value))
             checkboxFilters[column].Add(value);
+        InvalidateFilterCache();
     }
 
     private bool IsCheckboxChecked(string column, string value)
@@ -1773,6 +1779,21 @@
         }
 
         return list;
+    }
+
+    private List<MeliItemDto> GetCachedFilteredItems()
+    {
+        if (_filterDirty || _cachedFiltered is null)
+        {
+            _cachedFiltered = GetFilteredAndSortedItems();
+            _filterDirty = false;
+        }
+        return _cachedFiltered;
+    }
+
+    private void InvalidateFilterCache()
+    {
+        _filterDirty = true;
     }
 
     // --- Grouping ---
