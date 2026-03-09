@@ -187,20 +187,43 @@
 }
 
 <!-- Modal: Quitar cuenta -->
-@if (showDeleteConfirm)
+@if (showDeleteConfirm && deleteStats != null)
 {
-    <div class="modal-overlay" @onclick="() => showDeleteConfirm = false">
-        <div class="modal-card modal-small" @onclick:stopPropagation="true">
-            <div class="modal-header">
-                <h3>Quitar cuenta</h3>
-                <button class="btn-close" @onclick="() => showDeleteConfirm = false">&times;</button>
+    <div class="modal-overlay" @onclick="CloseDeleteModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: #fff3f3;">
+                <h3 style="color: var(--danger);">Quitar cuenta: @deleteStats.Nickname</h3>
+                <button class="btn-close" @onclick="CloseDeleteModal">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Estas seguro de que queres desconectar esta cuenta de MercadoLibre? Se eliminara el acceso.</p>
+                <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                    <strong style="color: #856404;">Atencion:</strong>
+                    <span style="color: #856404;"> Esta accion eliminara de la base de datos local todos los datos asociados a esta cuenta.</span>
+                </div>
+
+                <p style="margin-bottom: 0.5rem;">Se van a eliminar los siguientes datos:</p>
+                <ul style="margin: 0.5rem 0 1rem 1.5rem; line-height: 1.8;">
+                    <li><strong>@deleteStats.OrderCount ordenes</strong> sincronizadas</li>
+                    <li><strong>@deleteStats.ItemCount publicaciones</strong> sincronizadas</li>
+                    <li>La conexion y tokens de acceso de la cuenta</li>
+                </ul>
+
+                <div style="background: #d4edda; border: 1px solid #28a745; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                    <strong style="color: #155724;">Importante:</strong>
+                    <span style="color: #155724;"> NO se eliminara nada de MercadoLibre. Tus ordenes, publicaciones y datos en MercadoLibre no se van a modificar. Solo se borran los datos de esta aplicacion.</span>
+                </div>
+
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label class="form-label">Para confirmar, escribi <strong>@deleteStats.Nickname</strong> en el campo de abajo:</label>
+                    <input type="text" class="form-input" @bind="deleteConfirmText" @bind:event="oninput" placeholder="Escribi el nombre de la cuenta..." />
+                </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" @onclick="() => showDeleteConfirm = false">Cancelar</button>
-                <button class="btn btn-danger" @onclick="ConfirmRemoveAccount">Quitar</button>
+                <button class="btn btn-secondary" @onclick="CloseDeleteModal">Cancelar</button>
+                <button class="btn btn-danger" @onclick="ConfirmRemoveAccount"
+                        disabled="@(deleteConfirmText != deleteStats.Nickname || deletingAccount)">
+                    @(deletingAccount ? "Eliminando..." : "Quitar cuenta y datos")
+                </button>
             </div>
         </div>
     </div>
@@ -224,6 +247,9 @@
     private bool connecting;
     private bool showDeleteConfirm;
     private int accountToDelete;
+    private MeliAccountStatsDto? deleteStats;
+    private string deleteConfirmText = "";
+    private bool deletingAccount;
 
     // Connect flow
     private bool showConnectMenu;
@@ -444,28 +470,54 @@
         }
     }
 
-    private void RemoveAccount(int id)
+    private async Task RemoveAccount(int id)
     {
         accountToDelete = id;
-        showDeleteConfirm = true;
+        deleteConfirmText = "";
+        deletingAccount = false;
+        try
+        {
+            deleteStats = await Api.GetMeliAccountStatsAsync(id);
+            if (deleteStats != null)
+                showDeleteConfirm = true;
+            else
+                ToastService.Error("No se pudo obtener la informacion de la cuenta");
+        }
+        catch
+        {
+            ToastService.Error("Error al obtener datos de la cuenta");
+        }
+    }
+
+    private void CloseDeleteModal()
+    {
+        showDeleteConfirm = false;
+        deleteStats = null;
+        deleteConfirmText = "";
     }
 
     private async Task ConfirmRemoveAccount()
     {
-        showDeleteConfirm = false;
+        if (deleteStats == null || deleteConfirmText != deleteStats.Nickname) return;
+        deletingAccount = true;
 
         try
         {
             var deleted = await Api.DeleteMeliAccountAsync(accountToDelete);
             if (deleted)
             {
-                ToastService.Success("Cuenta desconectada");
+                ToastService.Success("Cuenta " + deleteStats.Nickname + " desconectada y datos eliminados");
+                CloseDeleteModal();
                 await LoadAccounts();
             }
         }
         catch
         {
             ToastService.Error("Error al quitar la cuenta");
+        }
+        finally
+        {
+            deletingAccount = false;
         }
     }
 }
