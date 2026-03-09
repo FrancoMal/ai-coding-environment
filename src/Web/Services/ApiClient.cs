@@ -134,6 +134,12 @@ public class ApiClient
         return await PostAsync<MeliAccountDto>("/api/meli/callback", new MeliCallbackRequest { Code = code });
     }
 
+
+    public async Task<MeliAccountStatsDto?> GetMeliAccountStatsAsync(int id)
+    {
+        return await GetAsync<MeliAccountStatsDto>($"/api/meli/accounts/{id}/stats");
+    }
+
     public async Task<bool> DeleteMeliAccountAsync(int id)
     {
         return await DeleteAsync($"/api/meli/accounts/{id}");

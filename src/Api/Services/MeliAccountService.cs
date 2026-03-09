@@ -117,6 +117,24 @@ public class MeliAccountService
             existing.TokenExpiresAt > DateTime.UtcNow, existing.CreatedAt);
     }
 
+
+    public async Task<object?> GetAccountStatsAsync(int id)
+    {
+        var account = await _db.MeliAccounts.FindAsync(id);
+        if (account is null) return null;
+
+        var orderCount = await _db.MeliOrders.CountAsync(o => o.MeliAccountId == id);
+        var itemCount = await _db.MeliItems.CountAsync(i => i.MeliAccountId == id);
+
+        return new
+        {
+            AccountId = id,
+            Nickname = account.Nickname,
+            OrderCount = orderCount,
+            ItemCount = itemCount
+        };
+    }
+
     public async Task<bool> DeleteAccountAsync(int id)
     {
         var account = await _db.MeliAccounts.FindAsync(id);

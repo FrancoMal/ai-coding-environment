@@ -56,6 +56,15 @@ public class MeliController : ControllerBase
         }
     }
 
+
+    [HttpGet("accounts/{id}/stats")]
+    public async Task<IActionResult> GetAccountStats(int id)
+    {
+        var stats = await _service.GetAccountStatsAsync(id);
+        if (stats is null) return NotFound();
+        return Ok(stats);
+    }
+
     [HttpDelete("accounts/{id}")]
     public async Task<IActionResult> DeleteAccount(int id)
     {
