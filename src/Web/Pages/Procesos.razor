@@ -19,7 +19,7 @@
     else
     {
         <div class="table-responsive">
-            <table class="table">
+            <table class="data-table">
                 <thead>
                     <tr>
                         <th>Nombre</th>
@@ -39,18 +39,18 @@
                                 <strong>@proc.Name</strong>
                                 @if (!string.IsNullOrEmpty(proc.Description))
                                 {
-                                    <br /><small class="text-muted">@proc.Description</small>
+                                    <br /><small class="proc-desc">@proc.Description</small>
                                 }
                             </td>
-                            <td><code>@proc.Code</code></td>
+                            <td><code class="proc-code">@proc.Code</code></td>
                             <td>@FormatSchedule(proc)</td>
                             <td>
-                                <span class="proc-badge @(proc.IsEnabled ? "proc-badge-enabled" : "proc-badge-disabled")">
+                                <span class="status-badge @(proc.IsEnabled ? "status-active" : "status-inactive")">
                                     @(proc.IsEnabled ? "Activo" : "Inactivo")
                                 </span>
                                 @if (!string.IsNullOrEmpty(proc.LastRunStatus))
                                 {
-                                    <span class="proc-badge @GetStatusBadgeClass(proc.LastRunStatus)">
+                                    <span class="status-badge @GetStatusBadgeClass(proc.LastRunStatus)">
                                         @proc.LastRunStatus
                                     </span>
                                 }
@@ -61,12 +61,12 @@
                                     <span>@proc.LastRunAt.Value.ToString("dd/MM/yyyy HH:mm")</span>
                                     @if (proc.LastRunDurationMs.HasValue)
                                     {
-                                        <br /><small class="text-muted">@FormatDuration(proc.LastRunDurationMs.Value)</small>
+                                        <br /><small class="proc-desc">@FormatDuration(proc.LastRunDurationMs.Value)</small>
                                     }
                                 }
                                 else
                                 {
-                                    <span class="text-muted">Nunca</span>
+                                    <span class="proc-desc">Nunca</span>
                                 }
                             </td>
                             <td>
@@ -76,19 +76,21 @@
                                 }
                                 else
                                 {
-                                    <span class="text-muted">-</span>
+                                    <span class="proc-desc">-</span>
                                 }
                             </td>
-                            <td class="proc-actions">
-                                <button class="btn btn-sm btn-outline" @onclick="() => OpenEditModal(proc)" title="Editar programacion">
-                                    @SvgIcons.Edit
-                                </button>
-                                <button class="btn btn-sm btn-primary" @onclick="() => OpenRunModal(proc)" title="Ejecutar ahora">
-                                    @SvgIcons.Refresh
-                                </button>
-                                <button class="btn btn-sm btn-outline" @onclick="() => OpenLogsModal(proc)" title="Ver historial">
-                                    @SvgIcons.History
-                                </button>
+                            <td>
+                                <div class="actions-cell">
+                                    <button class="btn-icon btn-edit" @onclick="() => OpenEditModal(proc)" title="Editar programacion">
+                                        @SvgIcons.Edit
+                                    </button>
+                                    <button class="btn-icon proc-btn-run" @onclick="() => OpenRunModal(proc)" title="Ejecutar ahora">
+                                        @SvgIcons.Refresh
+                                    </button>
+                                    <button class="btn-icon btn-edit" @onclick="() => OpenLogsModal(proc)" title="Ver historial">
+                                        @SvgIcons.History
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     }
@@ -102,9 +104,9 @@
 {
     <div class="modal-overlay" @onclick="CloseEditModal">
         <div class="modal-content" @onclick:stopPropagation="true">
-            <div class="modal-header" style="background: whitesmoke;">
+            <div class="modal-header">
                 <h3>Editar Programacion - @editProcess.Name</h3>
-                <button class="modal-close" @onclick="CloseEditModal">&times;</button>
+                <button class="btn-close" @onclick="CloseEditModal">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
@@ -120,7 +122,7 @@
                     <div class="form-group">
                         <label>Intervalo (minutos)</label>
                         <input type="number" class="form-control" @bind="editIntervalMinutes" min="1" />
-                        <small class="text-muted">
+                        <small class="proc-desc">
                             @if (editIntervalMinutes >= 1440)
                             {
                                 @($"= {editIntervalMinutes / 1440} dia(s)")
@@ -141,14 +143,14 @@
                 }
 
                 <div class="form-group">
-                    <label class="checkbox-label">
+                    <label class="proc-checkbox">
                         <input type="checkbox" @bind="editIsEnabled" />
                         Habilitado
                     </label>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-outline" @onclick="CloseEditModal">Cancelar</button>
+                <button class="btn btn-secondary" @onclick="CloseEditModal">Cancelar</button>
                 <button class="btn btn-primary" @onclick="SaveSchedule" disabled="@saving">
                     @(saving ? "Guardando..." : "Guardar")
                 </button>
@@ -161,17 +163,17 @@
 @if (showRunModal && runProcess != null)
 {
     <div class="modal-overlay" @onclick="CloseRunModal">
-        <div class="modal-content modal-sm" @onclick:stopPropagation="true">
-            <div class="modal-header" style="background: whitesmoke;">
+        <div class="modal-content proc-modal-sm" @onclick:stopPropagation="true">
+            <div class="modal-header">
                 <h3>Ejecutar Proceso</h3>
-                <button class="modal-close" @onclick="CloseRunModal">&times;</button>
+                <button class="btn-close" @onclick="CloseRunModal">&times;</button>
             </div>
             <div class="modal-body">
                 <p>Desea ejecutar <strong>@runProcess.Name</strong> ahora?</p>
-                <p class="text-muted">El proceso se ejecutara en segundo plano dentro de los proximos 30 segundos.</p>
+                <p class="proc-desc">El proceso se ejecutara en segundo plano dentro de los proximos 30 segundos.</p>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-outline" @onclick="CloseRunModal">Cancelar</button>
+                <button class="btn btn-secondary" @onclick="CloseRunModal">Cancelar</button>
                 <button class="btn btn-primary" @onclick="RunNow" disabled="@running">
                     @(running ? "Iniciando..." : "Ejecutar")
                 </button>
@@ -183,10 +185,10 @@
 @if (showLogsModal && logsProcess != null)
 {
     <div class="modal-overlay" @onclick="CloseLogsModal">
-        <div class="modal-content modal-lg" @onclick:stopPropagation="true">
-            <div class="modal-header" style="background: whitesmoke;">
+        <div class="modal-content proc-modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-header">
                 <h3>Historial - @logsProcess.Name</h3>
-                <button class="modal-close" @onclick="CloseLogsModal">&times;</button>
+                <button class="btn-close" @onclick="CloseLogsModal">&times;</button>
             </div>
             <div class="modal-body">
                 @if (logsLoading)
@@ -200,7 +202,7 @@
                 else
                 {
                     <div class="table-responsive">
-                        <table class="table">
+                        <table class="data-table">
                             <thead>
                                 <tr>
                                     <th>Inicio</th>
@@ -217,7 +219,7 @@
                                         <td>@log.StartedAt.ToString("dd/MM/yyyy HH:mm:ss")</td>
                                         <td>@(log.FinishedAt?.ToString("dd/MM/yyyy HH:mm:ss") ?? "-")</td>
                                         <td>
-                                            <span class="proc-badge @GetStatusBadgeClass(log.Status)">
+                                            <span class="status-badge @GetStatusBadgeClass(log.Status)">
                                                 @log.Status
                                             </span>
                                         </td>
@@ -225,7 +227,7 @@
                                         <td>
                                             @if (!string.IsNullOrEmpty(log.ErrorMessage))
                                             {
-                                                <span class="text-danger" title="@log.ErrorMessage">
+                                                <span class="proc-error" title="@log.ErrorMessage">
                                                     @Truncate(log.ErrorMessage, 60)
                                                 </span>
                                             }
@@ -237,7 +239,7 @@
                                             }
                                             else
                                             {
-                                                <span class="text-muted">-</span>
+                                                <span class="proc-desc">-</span>
                                             }
                                         </td>
                                     </tr>
@@ -249,15 +251,15 @@
                     @if (logsTotalPages > 1)
                     {
                         <div class="proc-pagination">
-                            <button class="btn btn-sm btn-outline" disabled="@(logsPage <= 1)" @onclick="() => LoadLogs(logsPage - 1)">Anterior</button>
+                            <button class="btn btn-sm btn-secondary" disabled="@(logsPage <= 1)" @onclick="() => LoadLogs(logsPage - 1)">Anterior</button>
                             <span>Pagina @logsPage de @logsTotalPages</span>
-                            <button class="btn btn-sm btn-outline" disabled="@(logsPage >= logsTotalPages)" @onclick="() => LoadLogs(logsPage + 1)">Siguiente</button>
+                            <button class="btn btn-sm btn-secondary" disabled="@(logsPage >= logsTotalPages)" @onclick="() => LoadLogs(logsPage + 1)">Siguiente</button>
                         </div>
                     }
                 }
             </div>
             <div class="modal-footer">
-                <button class="btn btn-outline" @onclick="CloseLogsModal">Cerrar</button>
+                <button class="btn btn-secondary" @onclick="CloseLogsModal">Cerrar</button>
             </div>
         </div>
     </div>
@@ -276,40 +278,38 @@
         margin: 0;
         font-size: 1.4rem;
     }
-    .proc-badge {
-        display: inline-block;
-        padding: 2px 10px;
-        border-radius: 12px;
+    .proc-desc {
+        color: var(--text-muted);
         font-size: 0.8rem;
-        font-weight: 500;
-        margin-right: 4px;
     }
-    .proc-badge-enabled {
-        background: #d4edda;
-        color: #155724;
+    .proc-code {
+        background: var(--bg);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
     }
-    .proc-badge-disabled {
-        background: #f8d7da;
-        color: #721c24;
+    .proc-error {
+        color: var(--danger);
+        font-size: 0.85rem;
     }
-    .proc-status-success {
-        background: #d4edda;
-        color: #155724;
+    .proc-btn-run {
+        color: var(--primary);
     }
-    .proc-status-error {
-        background: #f8d7da;
-        color: #721c24;
+    .proc-btn-run:hover {
+        background: var(--primary-bg);
     }
-    .proc-status-running {
-        background: #cce5ff;
-        color: #004085;
-    }
-    .proc-actions {
+    .proc-checkbox {
         display: flex;
-        gap: 4px;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
     }
-    .proc-actions button {
-        padding: 4px 8px;
+    .proc-modal-sm {
+        max-width: 450px;
+    }
+    .proc-modal-lg {
+        max-width: 900px;
     }
     .proc-pagination {
         display: flex;
@@ -318,23 +318,17 @@
         gap: 1rem;
         margin-top: 1rem;
     }
-    .text-muted {
-        color: #6c757d;
+    .proc-status-success {
+        background: rgba(16, 185, 129, 0.1);
+        color: #059669;
     }
-    .text-danger {
-        color: #dc3545;
+    .proc-status-error {
+        background: rgba(239, 68, 68, 0.1);
+        color: #dc2626;
     }
-    .checkbox-label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        cursor: pointer;
-    }
-    .modal-sm {
-        max-width: 450px;
-    }
-    .modal-lg {
-        max-width: 900px;
+    .proc-status-running {
+        background: rgba(59, 130, 246, 0.1);
+        color: #2563eb;
     }
 </style>
 @code {
@@ -516,6 +510,7 @@
             logsLoading = false;
         }
     }
+
     // --- Helpers ---
     private string FormatSchedule(ScheduledProcessDto proc)
     {
