@@ -1634,12 +1634,13 @@
 
     private string GetListingTypeLabel(string? type) => type switch
     {
-        "gold_special" => "Premium",
-        "gold_pro" => "Oro Pro",
+        "gold_special" => "Clasica",
+        "gold_pro" => "Premium",
         "gold" => "Oro",
+        "gold_premium" => "Oro Premium",
         "silver" => "Plata",
         "bronze" => "Bronce",
-        "free" => "Gratis",
+        "free" => "Gratuita",
         _ => type ?? "-"
     };
 
