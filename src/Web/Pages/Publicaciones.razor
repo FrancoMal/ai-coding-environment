@@ -1671,11 +1671,17 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Precio de Costo</label>
-                        <input type="number" class="form-input" @bind="newProductCostPrice" step="0.01" min="0" />
+                        <div style="position: relative;">
+                            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 1.1rem; font-weight: 700; color: #333;">$</span>
+                            <input type="text" class="form-input" style="font-size: 1.1rem; font-weight: 700; text-align: right; padding-left: 28px;" value="@newProductCostPriceFormatted" @oninput="OnCostPriceInput" inputmode="decimal" />
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">PVP</label>
-                        <input type="number" class="form-input" @bind="newProductRetailPrice" step="0.01" min="0" />
+                        <div style="position: relative;">
+                            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 1.1rem; font-weight: 700; color: #333;">$</span>
+                            <input type="text" class="form-input" style="font-size: 1.1rem; font-weight: 700; text-align: right; padding-left: 28px;" value="@newProductRetailPriceFormatted" @oninput="OnRetailPriceInput" inputmode="decimal" />
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Stock</label>
@@ -1772,6 +1778,8 @@
     private string newProductPhoto2 = "";
     private string newProductPhoto3 = "";
     private bool isLoadingDetails;
+    private string newProductCostPriceFormatted = "";
+    private string newProductRetailPriceFormatted = "";
     private bool showLinkProductModal;
     private MeliItemDto? linkProductItem;
     private List<ProductDto>? allProducts;
@@ -2580,7 +2588,54 @@
         public List<MeliItemDto> Items { get; set; } = new();
     }
 
-    // --- Product Linking ---
+    // --- Product Create Price Formatting ---
+    private void OnCostPriceInput(ChangeEventArgs e)
+    {
+        var formatted = FormatPriceInput(e.Value?.ToString() ?? "");
+        newProductCostPriceFormatted = formatted;
+        newProductCostPrice = ParseFormattedPrice(formatted);
+    }
+
+    private void OnRetailPriceInput(ChangeEventArgs e)
+    {
+        var formatted = FormatPriceInput(e.Value?.ToString() ?? "");
+        newProductRetailPriceFormatted = formatted;
+        newProductRetailPrice = ParseFormattedPrice(formatted);
+    }
+
+    private string FormatPriceInput(string raw)
+    {
+        if (raw.EndsWith(".") && !raw.Contains(','))
+            raw = raw[..^1] + ",";
+        else if (!raw.Contains(',') && raw.Count(c => c == '.') == 1)
+        {
+            var dotIdx = raw.IndexOf('.');
+            var afterDot = raw[(dotIdx + 1)..];
+            if (afterDot.Length <= 2 && afterDot.All(char.IsDigit))
+                raw = raw[..dotIdx] + "," + afterDot;
+        }
+        var cleaned = new string(raw.Where(c => char.IsDigit(c) || c == ',').ToArray());
+        var commaIdx = cleaned.IndexOf(',');
+        string intPart, decPart;
+        if (commaIdx >= 0)
+        {
+            intPart = cleaned[..commaIdx];
+            decPart = new string(cleaned[(commaIdx + 1)..].Where(char.IsDigit).ToArray());
+            if (decPart.Length > 2) decPart = decPart[..2];
+        }
+        else { intPart = cleaned; decPart = ""; }
+        intPart = intPart.TrimStart('0');
+        if (string.IsNullOrEmpty(intPart)) intPart = "0";
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < intPart.Length; i++)
+        {
+            if (i > 0 && (intPart.Length - i) % 3 == 0) sb.Append('.');
+            sb.Append(intPart[i]);
+        }
+        return commaIdx >= 0 ? sb + "," + decPart : sb.ToString();
+    }
+
+        // --- Product Linking ---
     private async Task OpenCreateProductFromItem(MeliItemDto item)
     {
         createProductItem = item;
@@ -2590,8 +2645,10 @@
         newProductModel = "";
         newProductSku = item.Sku ?? "";
         newProductCostPrice = 0;
-        newProductRetailPrice = item.Price;
+        newProductRetailPrice = item.OriginalPrice ?? item.Price;
         newProductStock = item.AvailableQuantity;
+        newProductCostPriceFormatted = FormatPrice(newProductCostPrice);
+        newProductRetailPriceFormatted = FormatPrice(newProductRetailPrice);
         newProductPhoto1 = "";
         newProductPhoto2 = "";
         newProductPhoto3 = "";
