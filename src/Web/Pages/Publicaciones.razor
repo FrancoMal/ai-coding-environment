@@ -68,7 +68,7 @@
                 </div>
                 <div class="more-filters-wrapper">
                     <button class="more-filters-btn @(filterPromo || filterNoProduct ? "has-active" : "")" @onclick="ToggleMoreFilters" @onclick:stopPropagation="true">
-                        ⚙️ Más Filtros @(GetActiveFilterCount() > 0 ? $"({GetActiveFilterCount()})" : "")
+                        ⚙️ Más Filtros @(GetActiveFilterCount() > 0 ? $"({GetActiveFilterCount()})" : "") ▾
                     </button>
                     @if (showMoreFilters)
                     {
