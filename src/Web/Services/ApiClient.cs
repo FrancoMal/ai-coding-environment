@@ -345,6 +345,28 @@ public class ApiClient
         return result.GetProperty("deleted").GetInt32();
     }
 
+    public async Task<BulkCreateProductResult?> BulkCreateProductsAsync(List<int> ids)
+    {
+        await SetAuthHeaderAsync();
+        var response = await _http.PostAsJsonAsync("/api/meli/items/bulk-create-products", new { ids });
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await _authService.LogoutAsync();
+            _navigation.NavigateTo("/login", forceLoad: true);
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorText = await response.Content.ReadAsStringAsync();
+            throw new Exception($"Error al crear productos ({response.StatusCode}): {errorText}");
+        }
+
+        return await response.Content.ReadFromJsonAsync<BulkCreateProductResult>();
+    }
+
+
         // --- Audit Logs ---
     public async Task<AuditLogListResponse?> GetAuditLogsAsync(DateTime from, DateTime to, string? entityType = null, int page = 1)
     {

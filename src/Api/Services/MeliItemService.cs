@@ -222,7 +222,98 @@ public class MeliItemService
         return count;
     }
 
-        public async Task<List<ItemPromotionDto>> GetItemPromotionsAsync(string meliItemId)
+    public async Task<BulkCreateProductResult> BulkCreateProductsAsync(List<int> ids)
+    {
+        var result = new BulkCreateProductResult();
+
+        var items = await _db.MeliItems
+            .Include(i => i.MeliAccount)
+            .Where(i => ids.Contains(i.Id))
+            .ToListAsync();
+
+        // Skip items that already have a product linked
+        var alreadyLinked = items.Where(i => i.ProductId.HasValue).ToList();
+        if (alreadyLinked.Any())
+        {
+            result.Skipped += alreadyLinked.Count;
+            result.SkippedMessages.Add($"{alreadyLinked.Count} publicaciones ya tenian producto vinculado");
+        }
+
+        var toProcess = items.Where(i => !i.ProductId.HasValue).ToList();
+
+        // Get all existing SKUs for duplicate detection
+        var existingSkus = await _db.Products
+            .Where(p => p.Sku != null && p.Sku != "")
+            .Select(p => new { p.Sku, p.Title, p.Id })
+            .ToListAsync();
+        var skuMap = existingSkus
+            .GroupBy(p => p.Sku!.ToLowerInvariant())
+            .ToDictionary(g => g.Key, g => g.First());
+
+        foreach (var item in toProcess)
+        {
+            // Check SKU duplicate
+            if (!string.IsNullOrWhiteSpace(item.Sku))
+            {
+                var skuLower = item.Sku.ToLowerInvariant();
+                if (skuMap.TryGetValue(skuLower, out var existing))
+                {
+                    // Link to existing product instead of creating
+                    item.ProductId = existing.Id;
+                    item.UpdatedAt = DateTime.UtcNow;
+                    result.Skipped++;
+                    result.SkippedMessages.Add($"SKU {item.Sku} ya existe (producto: {existing.Title}) - se vinculo automaticamente");
+                    continue;
+                }
+            }
+
+            // Create new product
+            var product = new Product
+            {
+                Title = item.Title,
+                Sku = item.Sku,
+                RetailPrice = item.Price,
+                Stock = item.AvailableQuantity,
+                Photo1 = item.Thumbnail,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.Products.Add(product);
+            await _db.SaveChangesAsync();
+
+            // Link item to product
+            item.ProductId = product.Id;
+            item.UpdatedAt = DateTime.UtcNow;
+
+            // Add to skuMap so next items with same SKU get detected
+            if (!string.IsNullOrWhiteSpace(item.Sku))
+            {
+                var skuLower = item.Sku.ToLowerInvariant();
+                if (!skuMap.ContainsKey(skuLower))
+                    skuMap[skuLower] = new { Sku = item.Sku, Title = product.Title, Id = product.Id };
+            }
+
+            result.Created++;
+        }
+
+        await _db.SaveChangesAsync();
+
+        // Audit log
+        var auditData = new
+        {
+            resumen = $"Creacion masiva: {result.Created} productos creados, {result.Skipped} omitidos",
+            created = result.Created,
+            skipped = result.Skipped,
+            skippedMessages = result.SkippedMessages
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(auditData);
+        await _auditLog.LogAsync("Product", string.Join(",", ids), "BULK_CREATE", json);
+
+        return result;
+    }
+
+            public async Task<List<ItemPromotionDto>> GetItemPromotionsAsync(string meliItemId)
     {
         var item = await _db.MeliItems
             .Include(i => i.MeliAccount)

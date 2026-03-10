@@ -2138,7 +2138,36 @@
 
     private void ClearSelection() => selectedItems.Clear();
 
-    private void ShowBulkDeleteModal() => showDeleteModal = true;
+    private async Task BulkCreateProducts()
+    {
+        if (!selectedItems.Any()) return;
+        try
+        {
+            var result = await Api.BulkCreateProductsAsync(selectedItems.ToList());
+            if (result == null) return;
+
+            if (result.Created > 0)
+                ToastService.Success($"Se crearon {result.Created} productos y se vincularon a sus publicaciones");
+
+            if (result.Skipped > 0)
+            {
+                foreach (var msg in result.SkippedMessages)
+                    ToastService.Info(msg);
+            }
+
+            if (result.Created == 0 && result.Skipped == 0)
+                ToastService.Info("No se crearon productos nuevos");
+
+            selectedItems.Clear();
+            await LoadItems();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error($"Error al crear productos: {ex.Message}");
+        }
+    }
+
+        private void ShowBulkDeleteModal() => showDeleteModal = true;
 
     private void CloseDeleteModal() => showDeleteModal = false;
 

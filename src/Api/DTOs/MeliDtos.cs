@@ -251,3 +251,14 @@ public class PublishItemResponse
     public string? Permalink { get; set; }
     public string? Error { get; set; }
 }
+public class BulkCreateProductsRequest
+{
+    public List<int> Ids { get; set; } = new();
+}
+
+public class BulkCreateProductResult
+{
+    public int Created { get; set; }
+    public int Skipped { get; set; }
+    public List<string> SkippedMessages { get; set; } = new();
+}

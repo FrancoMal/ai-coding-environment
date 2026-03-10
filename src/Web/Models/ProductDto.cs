@@ -49,3 +49,10 @@ public class UpdateProductRequest
     public int? Stock { get; set; }
     public bool? IsActive { get; set; }
 }
+
+public class BulkCreateProductResult
+{
+    public int Created { get; set; }
+    public int Skipped { get; set; }
+    public List<string> SkippedMessages { get; set; } = new();
+}
