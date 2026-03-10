@@ -1043,6 +1043,9 @@ public class MeliItemService
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         try
         {
+            // Detectar si la cuenta usa el nuevo modelo user_product_seller
+            var isUserProductSeller = await IsUserProductSellerAsync(http, account.MeliUserId);
+
             var pictures = new List<object>();
             foreach (var picUrl in request.PictureUrls.Where(u => !string.IsNullOrEmpty(u)))
             {
@@ -1064,7 +1067,6 @@ public class MeliItemService
                 .ToList();
             var itemBody = new Dictionary<string, object>
             {
-                ["title"] = request.Title,
                 ["category_id"] = request.CategoryId,
                 ["price"] = request.Price,
                 ["currency_id"] = "ARS",
@@ -1074,6 +1076,11 @@ public class MeliItemService
                 ["listing_type_id"] = request.ListingTypeId,
                 ["shipping"] = new { mode = "me2", free_shipping = request.FreeShipping }
             };
+            // Cuentas con user_product_seller usan family_name en vez de title
+            if (isUserProductSeller)
+                itemBody["family_name"] = request.Title;
+            else
+                itemBody["title"] = request.Title;
             if (pictures.Any()) itemBody["pictures"] = pictures;
             if (attributes.Any()) itemBody["attributes"] = attributes;
             var product = await _db.Products.FindAsync(request.ProductId);
@@ -1100,13 +1107,21 @@ public class MeliItemService
                 }
                 catch { }
             }
+            // Obtener titulo real (MeLi lo genera en cuentas user_product_seller)
+            var actualTitle = responseDoc.RootElement.TryGetProperty("title", out var titleProp)
+                ? titleProp.GetString() ?? request.Title : request.Title;
+            var respUserProductId = responseDoc.RootElement.TryGetProperty("user_product_id", out var upProp) && upProp.ValueKind != JsonValueKind.Null
+                ? upProp.GetString() : null;
+            var respFamilyName = responseDoc.RootElement.TryGetProperty("family_name", out var fnProp) && fnProp.ValueKind != JsonValueKind.Null
+                ? fnProp.GetString() : null;
             var newItem = new MeliItem
             {
-                MeliItemId = meliItemId, MeliAccountId = request.MeliAccountId, Title = request.Title,
+                MeliItemId = meliItemId, MeliAccountId = request.MeliAccountId, Title = actualTitle,
                 CategoryId = request.CategoryId, Price = request.Price, CurrencyId = "ARS",
                 AvailableQuantity = request.AvailableQuantity, Status = "active", Condition = request.Condition,
                 ListingTypeId = request.ListingTypeId, FreeShipping = request.FreeShipping,
                 Permalink = permalink, Sku = product?.Sku, ProductId = request.ProductId,
+                UserProductId = respUserProductId, FamilyName = respFamilyName,
                 DateCreated = DateTime.UtcNow, LastUpdated = DateTime.UtcNow
             };
             if (responseDoc.RootElement.TryGetProperty("thumbnail", out var th))
@@ -1125,6 +1140,26 @@ public class MeliItemService
         {
             return new PublishItemResponse { Error = ex.Message };
         }
+    }
+
+    private async Task<bool> IsUserProductSellerAsync(HttpClient http, long meliUserId)
+    {
+        try
+        {
+            var response = await http.GetAsync($"https://api.mercadolibre.com/users/{meliUserId}");
+            if (!response.IsSuccessStatusCode) return false;
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var tag in tags.EnumerateArray())
+                {
+                    if (tag.GetString() == "user_product_seller") return true;
+                }
+            }
+            return false;
+        }
+        catch { return false; }
     }
 
     private async Task<string?> UploadPictureToMeliAsync(HttpClient http, string dataUri)
