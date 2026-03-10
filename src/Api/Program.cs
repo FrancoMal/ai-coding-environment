@@ -53,6 +53,7 @@ builder.Services.AddScoped<MeliItemService>();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<ScheduledProcessService>();
 builder.Services.AddScoped<ProductService>();
+builder.Services.AddScoped<AiService>();
 
 // Background Jobs
 builder.Services.AddSingleton<IScheduledJob, SyncMeliOrdersJob>();

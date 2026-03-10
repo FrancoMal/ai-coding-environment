@@ -943,4 +943,215 @@ public class MeliItemService
 
         return new MeliItemDetailsDto(pictures, description);
     }
+
+    public async Task<List<CategoryPredictionDto>> PredictCategoryAsync(string title, int meliAccountId)
+    {
+        var account = await _db.MeliAccounts.FindAsync(meliAccountId);
+        if (account is null) throw new Exception("Cuenta no encontrada");
+        var token = await _accountService.GetValidTokenAsync(account);
+        if (token is null) throw new Exception("Token expirado. Reconecta la cuenta.");
+        var http = _httpFactory.CreateClient();
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var encodedTitle = Uri.EscapeDataString(title);
+        var response = await http.GetAsync($"https://api.mercadolibre.com/sites/MLA/domain_discovery/search?q={encodedTitle}");
+        if (!response.IsSuccessStatusCode)
+            return new List<CategoryPredictionDto>();
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        var results = new List<CategoryPredictionDto>();
+        foreach (var item in doc.RootElement.EnumerateArray())
+        {
+            if (results.Count >= 3) break;
+            var categoryId = item.TryGetProperty("category_id", out var cid) ? cid.GetString() ?? "" : "";
+            var categoryName = item.TryGetProperty("category_name", out var cn) ? cn.GetString() ?? "" : "";
+            var categoryPath = categoryName;
+            try
+            {
+                var catResp = await http.GetAsync($"https://api.mercadolibre.com/categories/{categoryId}");
+                if (catResp.IsSuccessStatusCode)
+                {
+                    var catJson = await catResp.Content.ReadAsStringAsync();
+                    using var catDoc = JsonDocument.Parse(catJson);
+                    if (catDoc.RootElement.TryGetProperty("path_from_root", out var pathArr) && pathArr.ValueKind == JsonValueKind.Array)
+                    {
+                        var names = new List<string>();
+                        foreach (var node in pathArr.EnumerateArray())
+                        {
+                            if (node.TryGetProperty("name", out var n) && n.ValueKind != JsonValueKind.Null)
+                                names.Add(n.GetString() ?? "");
+                        }
+                        categoryPath = string.Join(" > ", names);
+                    }
+                }
+            }
+            catch { }
+            results.Add(new CategoryPredictionDto { CategoryId = categoryId, CategoryName = categoryName, CategoryPath = categoryPath, Probability = 0 });
+        }
+        return results;
+    }
+
+    public async Task<List<CategoryAttributeDto>> GetCategoryAttributesAsync(string categoryId)
+    {
+        var http = _httpFactory.CreateClient();
+        var response = await http.GetAsync($"https://api.mercadolibre.com/categories/{categoryId}/attributes");
+        if (!response.IsSuccessStatusCode)
+            return new List<CategoryAttributeDto>();
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        var results = new List<CategoryAttributeDto>();
+        foreach (var attr in doc.RootElement.EnumerateArray())
+        {
+            var id = attr.TryGetProperty("id", out var aid) ? aid.GetString() ?? "" : "";
+            var name = attr.TryGetProperty("name", out var an) ? an.GetString() ?? "" : "";
+            var valueType = attr.TryGetProperty("value_type", out var vt) ? vt.GetString() ?? "string" : "string";
+            var required = false;
+            if (attr.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Object)
+            {
+                required = (tags.TryGetProperty("required", out var req) && req.ValueKind == JsonValueKind.True)
+                    || (tags.TryGetProperty("catalog_required", out var creq) && creq.ValueKind == JsonValueKind.True);
+            }
+            if (attr.TryGetProperty("tags", out var tags3) && tags3.ValueKind == JsonValueKind.Object)
+            {
+                if (tags3.TryGetProperty("hidden", out var hidden) && hidden.ValueKind == JsonValueKind.True) continue;
+                if (tags3.TryGetProperty("read_only", out var ro) && ro.ValueKind == JsonValueKind.True) continue;
+            }
+            var values = new List<AttributeValueOption>();
+            if (attr.TryGetProperty("values", out var vals) && vals.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var val in vals.EnumerateArray())
+                {
+                    var valId = val.TryGetProperty("id", out var vid) ? vid.GetString() ?? "" : "";
+                    var valName = val.TryGetProperty("name", out var vn) ? vn.GetString() ?? "" : "";
+                    values.Add(new AttributeValueOption { Id = valId, Name = valName });
+                }
+            }
+            string? defaultValue = null;
+            if (attr.TryGetProperty("default_value", out var dv) && dv.ValueKind != JsonValueKind.Null)
+                defaultValue = dv.GetString();
+            results.Add(new CategoryAttributeDto { Id = id, Name = name, ValueType = valueType, Required = required, Values = values, DefaultValue = defaultValue });
+        }
+        return results.OrderByDescending(a => a.Required).ThenBy(a => a.Name).ToList();
+    }
+
+    public async Task<PublishItemResponse> PublishItemAsync(PublishItemRequest request)
+    {
+        var account = await _db.MeliAccounts.FindAsync(request.MeliAccountId);
+        if (account is null) return new PublishItemResponse { Error = "Cuenta no encontrada" };
+        var token = await _accountService.GetValidTokenAsync(account);
+        if (token is null) return new PublishItemResponse { Error = "Token expirado. Reconecta la cuenta." };
+        var http = _httpFactory.CreateClient();
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        try
+        {
+            var pictures = new List<object>();
+            foreach (var picUrl in request.PictureUrls.Where(u => !string.IsNullOrEmpty(u)))
+            {
+                if (picUrl.StartsWith("data:"))
+                {
+                    var uploadedUrl = await UploadPictureToMeliAsync(http, picUrl);
+                    if (uploadedUrl is not null) pictures.Add(new { source = uploadedUrl });
+                }
+                else
+                {
+                    pictures.Add(new { source = picUrl });
+                }
+            }
+            var attributes = request.Attributes
+                .Where(a => !string.IsNullOrEmpty(a.ValueId) || !string.IsNullOrEmpty(a.ValueName))
+                .Select(a => a.ValueId is not null
+                    ? (object)new { id = a.Id, value_id = a.ValueId }
+                    : new { id = a.Id, value_name = a.ValueName })
+                .ToList();
+            var itemBody = new Dictionary<string, object>
+            {
+                ["title"] = request.Title,
+                ["category_id"] = request.CategoryId,
+                ["price"] = request.Price,
+                ["currency_id"] = "ARS",
+                ["available_quantity"] = request.AvailableQuantity,
+                ["buying_mode"] = "buy_it_now",
+                ["condition"] = request.Condition,
+                ["listing_type_id"] = request.ListingTypeId,
+                ["shipping"] = new { mode = "me2", free_shipping = request.FreeShipping }
+            };
+            if (pictures.Any()) itemBody["pictures"] = pictures;
+            if (attributes.Any()) itemBody["attributes"] = attributes;
+            var product = await _db.Products.FindAsync(request.ProductId);
+            if (product?.Sku is not null) itemBody["seller_custom_field"] = product.Sku;
+            var jsonBody = JsonSerializer.Serialize(itemBody);
+            var bodyContent = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+            var meliResponse = await http.PostAsync("https://api.mercadolibre.com/items", bodyContent);
+            if (!meliResponse.IsSuccessStatusCode)
+            {
+                var errorBody = await meliResponse.Content.ReadAsStringAsync();
+                return new PublishItemResponse { Error = $"Error de MercadoLibre ({meliResponse.StatusCode}): {errorBody}" };
+            }
+            var responseJson = await meliResponse.Content.ReadAsStringAsync();
+            using var responseDoc = JsonDocument.Parse(responseJson);
+            var meliItemId = responseDoc.RootElement.GetProperty("id").GetString() ?? "";
+            var permalink = responseDoc.RootElement.TryGetProperty("permalink", out var pl) ? pl.GetString() : null;
+            if (!string.IsNullOrWhiteSpace(request.Description))
+            {
+                try
+                {
+                    var descBody = JsonSerializer.Serialize(new { plain_text = request.Description });
+                    var descContent = new StringContent(descBody, Encoding.UTF8, "application/json");
+                    await http.PostAsync($"https://api.mercadolibre.com/items/{meliItemId}/description", descContent);
+                }
+                catch { }
+            }
+            var newItem = new MeliItem
+            {
+                MeliItemId = meliItemId, MeliAccountId = request.MeliAccountId, Title = request.Title,
+                CategoryId = request.CategoryId, Price = request.Price, CurrencyId = "ARS",
+                AvailableQuantity = request.AvailableQuantity, Status = "active", Condition = request.Condition,
+                ListingTypeId = request.ListingTypeId, FreeShipping = request.FreeShipping,
+                Permalink = permalink, Sku = product?.Sku, ProductId = request.ProductId,
+                DateCreated = DateTime.UtcNow, LastUpdated = DateTime.UtcNow
+            };
+            if (responseDoc.RootElement.TryGetProperty("thumbnail", out var th))
+            {
+                var thumb = th.GetString();
+                if (thumb?.StartsWith("http://") == true) thumb = "https://" + thumb[7..];
+                newItem.Thumbnail = thumb;
+            }
+            _db.MeliItems.Add(newItem);
+            await _db.SaveChangesAsync();
+            await _auditLog.LogAsync("MeliItem", meliItemId, "PUBLISH",
+                JsonSerializer.Serialize(new { titulo = request.Title, cuenta = account.Nickname, categoria = request.CategoryId }));
+            return new PublishItemResponse { Success = true, MeliItemId = meliItemId, Permalink = permalink };
+        }
+        catch (Exception ex)
+        {
+            return new PublishItemResponse { Error = ex.Message };
+        }
+    }
+
+    private async Task<string?> UploadPictureToMeliAsync(HttpClient http, string dataUri)
+    {
+        try
+        {
+            var commaIdx = dataUri.IndexOf(',');
+            if (commaIdx < 0) return null;
+            var meta = dataUri[..commaIdx];
+            var base64Data = dataUri[(commaIdx + 1)..];
+            var bytes = Convert.FromBase64String(base64Data);
+            var contentType = "image/jpeg";
+            if (meta.Contains("image/png")) contentType = "image/png";
+            else if (meta.Contains("image/webp")) contentType = "image/webp";
+            using var formContent = new MultipartFormDataContent();
+            var imageContent = new ByteArrayContent(bytes);
+            imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+            formContent.Add(imageContent, "file", "image.jpg");
+            var response = await http.PostAsync("https://api.mercadolibre.com/pictures/items/upload", formContent);
+            if (!response.IsSuccessStatusCode) return null;
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.TryGetProperty("variations", out var vars) && vars.ValueKind == JsonValueKind.Array
+                ? vars.EnumerateArray().FirstOrDefault().TryGetProperty("secure_url", out var su) ? su.GetString() : null
+                : doc.RootElement.TryGetProperty("secure_url", out var su2) ? su2.GetString() : null;
+        }
+        catch { return null; }
+    }
+
 }

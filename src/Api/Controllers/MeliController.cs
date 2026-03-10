@@ -13,12 +13,14 @@ public class MeliController : ControllerBase
     private readonly MeliAccountService _service;
     private readonly MeliOrderService _orderService;
     private readonly MeliItemService _itemService;
+    private readonly AiService _aiService;
 
-    public MeliController(MeliAccountService service, MeliOrderService orderService, MeliItemService itemService)
+    public MeliController(MeliAccountService service, MeliOrderService orderService, MeliItemService itemService, AiService aiService)
     {
         _service = service;
         _orderService = orderService;
         _itemService = itemService;
+        _aiService = aiService;
     }
 
     [HttpGet("accounts")]
@@ -254,6 +256,67 @@ public class MeliController : ControllerBase
 
         var deleted = await _itemService.DeleteItemsAsync(request.Ids);
         return Ok(new { deleted });
+    }
+
+
+    // --- Publish endpoints ---
+
+    [HttpPost("publish/predict-category")]
+    public async Task<IActionResult> PredictCategory([FromBody] PredictCategoryRequest request, [FromQuery] int accountId)
+    {
+        try
+        {
+            var result = await _itemService.PredictCategoryAsync(request.Title, accountId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("publish/category-attributes/{categoryId}")]
+    public async Task<IActionResult> GetCategoryAttributes(string categoryId)
+    {
+        try
+        {
+            var result = await _itemService.GetCategoryAttributesAsync(categoryId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("publish/suggest-attributes")]
+    public async Task<IActionResult> SuggestAttributes([FromBody] SuggestAttributesRequest request)
+    {
+        try
+        {
+            var result = await _aiService.SuggestAttributesAsync(request);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("publish")]
+    public async Task<IActionResult> PublishItem([FromBody] PublishItemRequest request)
+    {
+        try
+        {
+            var result = await _itemService.PublishItemAsync(request);
+            if (!result.Success)
+                return BadRequest(new { error = result.Error });
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 }
 

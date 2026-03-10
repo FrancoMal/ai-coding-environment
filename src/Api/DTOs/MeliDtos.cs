@@ -174,3 +174,80 @@ public record MeliItemDetailsDto(
     List<string> Pictures,
     string? Description
 );
+
+// --- Publish DTOs ---
+
+public record PredictCategoryRequest(string Title);
+
+public class CategoryPredictionDto
+{
+    public string CategoryId { get; set; } = "";
+    public string CategoryName { get; set; } = "";
+    public string CategoryPath { get; set; } = "";
+    public double Probability { get; set; }
+}
+
+public class CategoryAttributeDto
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string ValueType { get; set; } = "";
+    public bool Required { get; set; }
+    public List<AttributeValueOption> Values { get; set; } = new();
+    public string? DefaultValue { get; set; }
+    public string? SuggestedValue { get; set; }
+}
+
+public class AttributeValueOption
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+}
+
+public record SuggestAttributesRequest(
+    string Title,
+    string? Description,
+    string? Brand,
+    string? Model,
+    string CategoryId,
+    string CategoryName,
+    List<CategoryAttributeDto> Attributes
+);
+
+public class SuggestedAttributeDto
+{
+    public string AttributeId { get; set; } = "";
+    public string? ValueId { get; set; }
+    public string? ValueName { get; set; }
+}
+
+public class PublishItemRequest
+{
+    public int ProductId { get; set; }
+    public int MeliAccountId { get; set; }
+    public string CategoryId { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string? Description { get; set; }
+    public decimal Price { get; set; }
+    public int AvailableQuantity { get; set; }
+    public string Condition { get; set; } = "new";
+    public string ListingTypeId { get; set; } = "gold_special";
+    public bool FreeShipping { get; set; } = true;
+    public List<PublishAttributeDto> Attributes { get; set; } = new();
+    public List<string> PictureUrls { get; set; } = new();
+}
+
+public class PublishAttributeDto
+{
+    public string Id { get; set; } = "";
+    public string? ValueId { get; set; }
+    public string? ValueName { get; set; }
+}
+
+public class PublishItemResponse
+{
+    public bool Success { get; set; }
+    public string? MeliItemId { get; set; }
+    public string? Permalink { get; set; }
+    public string? Error { get; set; }
+}

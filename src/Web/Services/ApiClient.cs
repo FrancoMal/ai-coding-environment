@@ -389,6 +389,47 @@ public class ApiClient
         return await GetAsync<ProcessLogListResponse>(url);
     }
 
+    // --- MeLi Publish ---
+    public async Task<List<CategoryPredictionDto>?> PredictCategoryAsync(string title, int accountId)
+    {
+        return await PostAsync<List<CategoryPredictionDto>>($"/api/meli/publish/predict-category?accountId={accountId}", new { title });
+    }
+
+    public async Task<List<CategoryAttributeDto>?> GetCategoryAttributesAsync(string categoryId)
+    {
+        return await GetAsync<List<CategoryAttributeDto>>($"/api/meli/publish/category-attributes/{categoryId}");
+    }
+
+    public async Task<List<SuggestedAttributeDto>?> SuggestAttributesAsync(object request)
+    {
+        return await PostAsync<List<SuggestedAttributeDto>>("/api/meli/publish/suggest-attributes", request);
+    }
+
+    public async Task<PublishItemResponse?> PublishItemAsync(PublishItemRequest request)
+    {
+        await SetAuthHeaderAsync();
+        var response = await _http.PostAsJsonAsync("/api/meli/publish", request);
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await _authService.LogoutAsync();
+            _navigation.NavigateTo("/login", forceLoad: true);
+            return null;
+        }
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync();
+            try
+            {
+                var doc = System.Text.Json.JsonDocument.Parse(errorBody);
+                if (doc.RootElement.TryGetProperty("error", out var errorProp))
+                    return new PublishItemResponse { Error = errorProp.GetString() };
+            }
+            catch (System.Text.Json.JsonException) { }
+            return new PublishItemResponse { Error = $"Error del servidor ({response.StatusCode})" };
+        }
+        return await response.Content.ReadFromJsonAsync<PublishItemResponse>();
+    }
+
     // --- HTTP helpers ---
     private async Task<T?> GetAsync<T>(string url)
     {

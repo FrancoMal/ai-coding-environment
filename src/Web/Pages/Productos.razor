@@ -36,7 +36,7 @@
                             <th style="text-align: right;">PVP</th>
                             <th style="text-align: center;">Stock</th>
                             <th style="text-align: center;">Estado</th>
-                            <th style="width: 80px;">Acciones</th>
+                            <th style="width: 120px;">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -58,15 +58,18 @@
                                 <td><strong>@product.Title</strong></td>
                                 <td>@(product.Brand ?? "-")</td>
                                 <td>@(product.Model ?? "-")</td>
-                                <td style="text-align: right;">$@product.CostPrice.ToString("N2")</td>
-                                <td style="text-align: right;">$@product.RetailPrice.ToString("N2")</td>
-                                <td style="text-align: center;">@product.Stock</td>
+                                <td style="text-align: right;">$@FormatPrice(product.CostPrice)</td>
+                                <td style="text-align: right;">$@FormatPrice(product.RetailPrice)</td>
+                                <td style="text-align: center; font-weight: 700;">@product.Stock</td>
                                 <td style="text-align: center;">
                                     <span class="status-badge @(product.IsActive ? "status-active" : "status-inactive")">
                                         @(product.IsActive ? "Activo" : "Inactivo")
                                     </span>
                                 </td>
                                 <td class="actions-cell">
+                                    <button class="btn-publish" @onclick="() => StartPublishWizard(product)" title="Publicar en MeLi">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                                    </button>
                                     <button class="btn-icon btn-edit" @onclick="() => ShowEditForm(product)" title="Editar">
                                         @SvgIcons.Edit
                                     </button>
@@ -83,6 +86,7 @@
     </div>
 </div>
 
+@* ===== CREATE/EDIT PRODUCT MODAL ===== *@
 @if (showForm)
 {
     <div class="modal-overlay" @onclick="CloseForm">
@@ -96,18 +100,14 @@
                 {
                     <div class="form-error">@formError</div>
                 }
-
                 <div class="form-group">
                     <label class="form-label">Titulo *</label>
                     <input class="form-input" @bind="formTitle" placeholder="Nombre del producto" />
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">Descripcion</label>
-                    <textarea class="form-input" @bind="formDescription" rows="3"
-                              placeholder="Descripcion del producto"></textarea>
+                    <textarea class="form-input" @bind="formDescription" rows="3" placeholder="Descripcion del producto"></textarea>
                 </div>
-
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Marca</label>
@@ -118,7 +118,6 @@
                         <input class="form-input" @bind="formModel" placeholder="Modelo" />
                     </div>
                 </div>
-
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Precio de Costo</label>
@@ -135,7 +134,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Stock</label>
@@ -152,7 +150,6 @@
                         </div>
                     }
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">Fotos (maximo 2MB cada una)</label>
                     <div class="photo-upload-grid">
@@ -164,14 +161,12 @@
                                 @if (!string.IsNullOrEmpty(photo))
                                 {
                                     <img src="@photo" class="photo-preview" alt="Foto @(index + 1)" />
-                                    <button class="photo-remove-btn" type="button" @onclick="() => RemovePhoto(index)"
-                                            title="Quitar foto">&times;</button>
+                                    <button class="photo-remove-btn" type="button" @onclick="() => RemovePhoto(index)" title="Quitar foto">&times;</button>
                                 }
                                 else
                                 {
                                     <label class="photo-upload-label">
-                                        <InputFile OnChange="(e) => OnPhotoSelected(e, index)"
-                                                   accept="image/*" />
+                                        <InputFile OnChange="(e) => OnPhotoSelected(e, index)" accept="image/*" />
                                         <span class="photo-upload-placeholder">+ Foto @(index + 1)</span>
                                     </label>
                                 }
@@ -190,6 +185,7 @@
     </div>
 }
 
+@* ===== DELETE CONFIRM MODAL ===== *@
 @if (showDeleteConfirm)
 {
     <div class="modal-overlay" @onclick="() => showDeleteConfirm = false">
@@ -210,6 +206,283 @@
     </div>
 }
 
+@* ===== PUBLISH WIZARD MODAL ===== *@
+@if (showPublishWizard)
+{
+    <div class="modal-overlay" @onclick="ClosePublishWizard">
+        <div class="modal-card modal-wide" @onclick:stopPropagation="true" style="max-width: 720px;">
+            <div class="modal-header" style="background: whitesmoke;">
+                <h3>Publicar en MercadoLibre</h3>
+                <button class="btn-close" @onclick="ClosePublishWizard">&times;</button>
+            </div>
+            <div style="padding: 16px 20px 0;">
+                <div class="publish-wizard-steps">
+                    <div class="publish-step @(publishStep == 1 ? "active" : publishStep > 1 ? "completed" : "")">
+                        <span class="step-number">@(publishStep > 1 ? "\u2713" : "1")</span>
+                        <span>Datos</span>
+                    </div>
+                    <div class="publish-step-connector @(publishStep > 1 ? "completed" : "")"></div>
+                    <div class="publish-step @(publishStep == 2 ? "active" : publishStep > 2 ? "completed" : "")">
+                        <span class="step-number">@(publishStep > 2 ? "\u2713" : "2")</span>
+                        <span>Categoria</span>
+                    </div>
+                    <div class="publish-step-connector @(publishStep > 2 ? "completed" : "")"></div>
+                    <div class="publish-step @(publishStep == 3 ? "active" : "")">
+                        <span class="step-number">3</span>
+                        <span>Publicar</span>
+                    </div>
+                </div>
+            </div>
+            <div class="publish-wizard-body">
+                @if (!string.IsNullOrEmpty(publishError))
+                {
+                    <div class="form-error">@publishError</div>
+                }
+                @if (publishStep == 1)
+                {
+                    <div class="form-group">
+                        <label class="form-label">Cuenta MercadoLibre *</label>
+                        <select class="form-input" @bind="pubAccountId">
+                            <option value="0">-- Seleccionar cuenta --</option>
+                            @if (meliAccounts != null)
+                            {
+                                @foreach (var acc in meliAccounts.Where(a => a.TokenValid))
+                                {
+                                    <option value="@acc.Id">@acc.Nickname</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Titulo *</label>
+                        <input class="form-input" @bind="pubTitle" placeholder="Titulo de la publicacion" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Descripcion</label>
+                        <textarea class="form-input" @bind="pubDescription" rows="3" placeholder="Descripcion del producto"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Precio *</label>
+                            <div style="position: relative;">
+                                <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 1.1rem; font-weight: 700; color: #333;">$</span>
+                                <input type="text" class="form-input" style="font-size: 1.1rem; font-weight: 700; text-align: right; padding-left: 28px;" value="@pubPriceFormatted" @oninput="OnPubPriceInput" inputmode="decimal" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Stock *</label>
+                            <input class="form-input" type="number" min="1" style="font-size: 1.1rem; font-weight: 700; text-align: right;" @bind="pubStock" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Condicion</label>
+                        <div class="condition-selector">
+                            <div class="condition-option @(pubCondition == "new" ? "selected" : "")" @onclick='() => pubCondition = "new"'>Nuevo</div>
+                            <div class="condition-option @(pubCondition == "used" ? "selected" : "")" @onclick='() => pubCondition = "used"'>Usado</div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Tipo de publicacion</label>
+                        <div class="listing-type-selector">
+                            <div class="listing-type-option @(pubListingType == "gold_special" ? "selected" : "")" @onclick='() => pubListingType = "gold_special"'>
+                                <div class="lt-name">Premium</div>
+                                <div class="lt-desc">Mayor exposicion</div>
+                            </div>
+                            <div class="listing-type-option @(pubListingType == "gold_pro" ? "selected" : "")" @onclick='() => pubListingType = "gold_pro"'>
+                                <div class="lt-name">Clasica</div>
+                                <div class="lt-desc">Menor comision</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" @bind="pubFreeShipping" />
+                            <span class="form-label" style="margin: 0;">Envio gratis</span>
+                        </label>
+                    </div>
+                    @if (pubPhotos.Any())
+                    {
+                        <div class="form-group">
+                            <label class="form-label">Fotos del producto</label>
+                            <div class="publish-photos-preview">
+                                @foreach (var photo in pubPhotos)
+                                {
+                                    <img src="@photo" alt="Foto producto" />
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+                @if (publishStep == 2)
+                {
+                    <div class="form-group">
+                        <label class="form-label" style="font-weight: 700;">Categoria</label>
+                        @if (isLoadingCategories)
+                        {
+                            <p class="text-muted">Prediciendo categoria...</p>
+                        }
+                        else if (categoryPredictions != null && categoryPredictions.Any())
+                        {
+                            <div class="category-predictions-list">
+                                @foreach (var cat in categoryPredictions)
+                                {
+                                    <div class="category-option @(pubCategoryId == cat.CategoryId ? "selected" : "")" @onclick="() => SelectCategory(cat)">
+                                        <div class="cat-name">@cat.CategoryName</div>
+                                        <div class="cat-path">@cat.CategoryPath</div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No se pudo predecir la categoria. Verifica el titulo.</p>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(pubCategoryId))
+                    {
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <label class="form-label" style="font-weight: 700; margin: 0;">Atributos de la ficha tecnica</label>
+                            <button class="btn-ai-suggest" @onclick="SuggestAttributesWithAI" disabled="@isSuggestingAttributes">
+                                @if (isSuggestingAttributes)
+                                {
+                                    <span class="spinner-small"></span>
+                                    <span>Sugiriendo...</span>
+                                }
+                                else
+                                {
+                                    <span>&#10024; Sugerir con IA</span>
+                                }
+                            </button>
+                        </div>
+                        @if (isLoadingAttributes)
+                        {
+                            <p class="text-muted">Cargando atributos...</p>
+                        }
+                        else if (categoryAttributes != null && categoryAttributes.Any())
+                        {
+                            <div class="attribute-grid">
+                                @foreach (var attr in categoryAttributes)
+                                {
+                                    var attrId = attr.Id;
+                                    <div class="attribute-item">
+                                        <label>
+                                            @attr.Name
+                                            @if (attr.Required) { <span class="attr-required">*</span> }
+                                        </label>
+                                        @if (attr.Values.Any())
+                                        {
+                                            <select value="@GetAttributeValue(attrId)" @onchange="(e) => SetAttributeValue(attrId, e)">
+                                                <option value="">-- Seleccionar --</option>
+                                                @foreach (var val in attr.Values)
+                                                {
+                                                    <option value="@val.Id">@val.Name</option>
+                                                }
+                                            </select>
+                                        }
+                                        else
+                                        {
+                                            <input type="text" value="@GetAttributeTextValue(attrId)" @onchange="(e) => SetAttributeTextValue(attrId, e)" placeholder="@attr.Name" />
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                }
+                @if (publishStep == 3)
+                {
+                    @if (publishResult != null)
+                    {
+                        @if (publishResult.Success)
+                        {
+                            <div class="publish-success">
+                                <div class="success-icon">&#9989;</div>
+                                <h3>Publicacion creada</h3>
+                                <p>Tu producto fue publicado exitosamente en MercadoLibre.</p>
+                                @if (!string.IsNullOrEmpty(publishResult.Permalink))
+                                {
+                                    <a href="@publishResult.Permalink" target="_blank">Ver publicacion &#8599;</a>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="form-error">Error: @publishResult.Error</div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="publish-review">
+                            <div class="review-section">
+                                <h4>Datos de la publicacion</h4>
+                                <div class="review-row"><span class="review-label">Cuenta</span><span class="review-value">@(meliAccounts?.FirstOrDefault(a => a.Id == pubAccountId)?.Nickname ?? "-")</span></div>
+                                <div class="review-row"><span class="review-label">Titulo</span><span class="review-value">@pubTitle</span></div>
+                                <div class="review-row"><span class="review-label">Precio</span><span class="review-value">$@pubPriceFormatted</span></div>
+                                <div class="review-row"><span class="review-label">Stock</span><span class="review-value">@pubStock</span></div>
+                                <div class="review-row"><span class="review-label">Condicion</span><span class="review-value">@(pubCondition == "new" ? "Nuevo" : "Usado")</span></div>
+                                <div class="review-row"><span class="review-label">Tipo</span><span class="review-value">@(pubListingType == "gold_special" ? "Premium" : "Clasica")</span></div>
+                                <div class="review-row"><span class="review-label">Envio gratis</span><span class="review-value">@(pubFreeShipping ? "Si" : "No")</span></div>
+                            </div>
+                            <div class="review-section">
+                                <h4>Categoria</h4>
+                                <div class="review-row"><span class="review-label">Categoria</span><span class="review-value">@(categoryPredictions?.FirstOrDefault(c => c.CategoryId == pubCategoryId)?.CategoryName ?? pubCategoryId)</span></div>
+                            </div>
+                            @if (attributeValues.Any())
+                            {
+                                <div class="review-section">
+                                    <h4>Atributos (@attributeValues.Count completados)</h4>
+                                    @foreach (var kv in attributeValues.Take(10))
+                                    {
+                                        var attrName = categoryAttributes?.FirstOrDefault(a => a.Id == kv.Key)?.Name ?? kv.Key;
+                                        <div class="review-row"><span class="review-label">@attrName</span><span class="review-value">@(GetDisplayValueForAttribute(kv.Key))</span></div>
+                                    }
+                                    @if (attributeValues.Count > 10)
+                                    {
+                                        <p class="text-muted" style="font-size: 0.8rem; margin-top: 6px;">... y @(attributeValues.Count - 10) atributos mas</p>
+                                    }
+                                </div>
+                            }
+                            @if (pubPhotos.Any())
+                            {
+                                <div class="review-section">
+                                    <h4>Fotos (@pubPhotos.Count)</h4>
+                                    <div class="publish-photos-preview">
+                                        @foreach (var photo in pubPhotos) { <img src="@photo" alt="Foto" /> }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between;">
+                <div>
+                    @if (publishStep > 1 && publishResult == null)
+                    {
+                        <button class="btn btn-secondary" @onclick="PreviousStep">Anterior</button>
+                    }
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    @if (publishResult != null && publishResult.Success)
+                    {
+                        <button class="btn btn-primary" @onclick="ClosePublishWizard">Cerrar</button>
+                    }
+                    else if (publishStep < 3)
+                    {
+                        <button class="btn btn-primary" @onclick="NextStep">Siguiente</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-primary" @onclick="ExecutePublish" disabled="@isPublishing">
+                            @(isPublishing ? "Publicando..." : "Publicar en MercadoLibre")
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<ProductDto>? products;
     private bool isLoading = true;
@@ -217,8 +490,6 @@
     private bool isEditing;
     private bool isSaving;
     private string? formError;
-
-    // Form fields
     private int? editingProductId;
     private string formTitle = "";
     private string formDescription = "";
@@ -233,65 +504,59 @@
     private string? formPhoto1;
     private string? formPhoto2;
     private string? formPhoto3;
-
-    // Delete
     private bool showDeleteConfirm;
     private ProductDto? productToDelete;
+    private const long MaxFileSize = 2 * 1024 * 1024;
 
-    private const long MaxFileSize = 2 * 1024 * 1024; // 2MB
+    // Publish wizard state
+    private bool showPublishWizard;
+    private int publishStep = 1;
+    private string? publishError;
+    private ProductDto? publishingProduct;
+    private List<MeliAccountDto>? meliAccounts;
+    private int pubAccountId;
+    private string pubTitle = "";
+    private string? pubDescription;
+    private decimal pubPrice;
+    private string pubPriceFormatted = "";
+    private int pubStock = 1;
+    private string pubCondition = "new";
+    private string pubListingType = "gold_special";
+    private bool pubFreeShipping = true;
+    private List<string> pubPhotos = new();
+    private bool isLoadingCategories;
+    private List<CategoryPredictionDto>? categoryPredictions;
+    private string pubCategoryId = "";
+    private bool isLoadingAttributes;
+    private List<CategoryAttributeDto>? categoryAttributes;
+    private bool isSuggestingAttributes;
+    private Dictionary<string, (string? valueId, string? valueName)> attributeValues = new();
+    private bool isPublishing;
+    private PublishItemResponse? publishResult;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadData();
-    }
+    protected override async Task OnInitializedAsync() { await LoadData(); }
 
     private async Task LoadData()
     {
         isLoading = true;
-        try
-        {
-            products = await Api.GetProductsAsync();
-        }
-        catch
-        {
-            ToastService.Error("Error al cargar los productos");
-        }
+        try { products = await Api.GetProductsAsync(); }
+        catch { ToastService.Error("Error al cargar los productos"); }
         isLoading = false;
     }
 
-    private string? GetPhoto(int index) => index switch
-    {
-        0 => formPhoto1,
-        1 => formPhoto2,
-        2 => formPhoto3,
-        _ => null
-    };
+    private string? GetPhoto(int index) => index switch { 0 => formPhoto1, 1 => formPhoto2, 2 => formPhoto3, _ => null };
 
     private void SetPhoto(int index, string? value)
     {
-        switch (index)
-        {
-            case 0: formPhoto1 = value; break;
-            case 1: formPhoto2 = value; break;
-            case 2: formPhoto3 = value; break;
-        }
+        switch (index) { case 0: formPhoto1 = value; break; case 1: formPhoto2 = value; break; case 2: formPhoto3 = value; break; }
     }
 
-    private void RemovePhoto(int index)
-    {
-        SetPhoto(index, null);
-        StateHasChanged();
-    }
+    private void RemovePhoto(int index) { SetPhoto(index, null); StateHasChanged(); }
 
     private async Task OnPhotoSelected(InputFileChangeEventArgs e, int index)
     {
         var file = e.File;
-        if (file.Size > MaxFileSize)
-        {
-            ToastService.Error("La foto supera los 2MB permitidos");
-            return;
-        }
-
+        if (file.Size > MaxFileSize) { ToastService.Error("La foto supera los 2MB permitidos"); return; }
         try
         {
             var buffer = new byte[file.Size];
@@ -301,174 +566,217 @@
             SetPhoto(index, dataUri);
             StateHasChanged();
         }
-        catch
-        {
-            ToastService.Error("Error al cargar la foto");
-        }
+        catch { ToastService.Error("Error al cargar la foto"); }
     }
 
     private void ShowCreateForm()
     {
-        isEditing = false;
-        editingProductId = null;
-        formTitle = "";
-        formDescription = "";
-        formBrand = "";
-        formModel = "";
-        formCostPrice = 0;
-        formRetailPrice = 0;
-        formStock = 0;
-        formCostPriceFormatted = FormatPrice(0);
-        formRetailPriceFormatted = FormatPrice(0);
-        formIsActive = true;
-        formPhoto1 = null;
-        formPhoto2 = null;
-        formPhoto3 = null;
-        formError = null;
-        showForm = true;
+        isEditing = false; editingProductId = null;
+        formTitle = ""; formDescription = ""; formBrand = ""; formModel = "";
+        formCostPrice = 0; formRetailPrice = 0; formStock = 0;
+        formCostPriceFormatted = FormatPrice(0); formRetailPriceFormatted = FormatPrice(0);
+        formIsActive = true; formPhoto1 = null; formPhoto2 = null; formPhoto3 = null;
+        formError = null; showForm = true;
     }
 
     private void ShowEditForm(ProductDto product)
     {
-        isEditing = true;
-        editingProductId = product.Id;
-        formTitle = product.Title;
-        formDescription = product.Description ?? "";
-        formBrand = product.Brand ?? "";
-        formModel = product.Model ?? "";
-        formCostPrice = product.CostPrice;
-        formRetailPrice = product.RetailPrice;
+        isEditing = true; editingProductId = product.Id;
+        formTitle = product.Title; formDescription = product.Description ?? "";
+        formBrand = product.Brand ?? ""; formModel = product.Model ?? "";
+        formCostPrice = product.CostPrice; formRetailPrice = product.RetailPrice;
         formStock = product.Stock;
         formCostPriceFormatted = FormatPrice(formCostPrice);
         formRetailPriceFormatted = FormatPrice(formRetailPrice);
         formIsActive = product.IsActive;
-        formPhoto1 = product.Photo1;
-        formPhoto2 = product.Photo2;
-        formPhoto3 = product.Photo3;
-        formError = null;
-        showForm = true;
+        formPhoto1 = product.Photo1; formPhoto2 = product.Photo2; formPhoto3 = product.Photo3;
+        formError = null; showForm = true;
     }
 
-    private void CloseForm()
-    {
-        showForm = false;
-        formError = null;
-    }
+    private void CloseForm() { showForm = false; formError = null; }
 
     private async Task SaveProduct()
     {
         formError = null;
-
-        if (string.IsNullOrWhiteSpace(formTitle))
-        {
-            formError = "El titulo es obligatorio";
-            return;
-        }
-
+        if (string.IsNullOrWhiteSpace(formTitle)) { formError = "El titulo es obligatorio"; return; }
         isSaving = true;
         try
         {
             if (isEditing && editingProductId.HasValue)
             {
-                var update = new UpdateProductRequest
-                {
-                    Title = formTitle,
-                    Description = formDescription,
-                    Brand = formBrand,
-                    Model = formModel,
-                    CostPrice = formCostPrice,
-                    RetailPrice = formRetailPrice,
-                    Stock = formStock,
-                    IsActive = formIsActive,
-                    Photo1 = formPhoto1 ?? "",
-                    Photo2 = formPhoto2 ?? "",
-                    Photo3 = formPhoto3 ?? ""
-                };
-
+                var update = new UpdateProductRequest { Title = formTitle, Description = formDescription, Brand = formBrand, Model = formModel, CostPrice = formCostPrice, RetailPrice = formRetailPrice, Stock = formStock, IsActive = formIsActive, Photo1 = formPhoto1 ?? "", Photo2 = formPhoto2 ?? "", Photo3 = formPhoto3 ?? "" };
                 var result = await Api.UpdateProductAsync(editingProductId.Value, update);
-                if (result is null)
-                {
-                    formError = "Error al actualizar el producto";
-                    return;
-                }
+                if (result is null) { formError = "Error al actualizar el producto"; return; }
                 ToastService.Success("Producto actualizado");
             }
             else
             {
-                var create = new CreateProductRequest
-                {
-                    Title = formTitle,
-                    Description = formDescription,
-                    Brand = formBrand,
-                    Model = formModel,
-                    CostPrice = formCostPrice,
-                    RetailPrice = formRetailPrice,
-                    Stock = formStock,
-                    Photo1 = formPhoto1,
-                    Photo2 = formPhoto2,
-                    Photo3 = formPhoto3
-                };
-
+                var create = new CreateProductRequest { Title = formTitle, Description = formDescription, Brand = formBrand, Model = formModel, CostPrice = formCostPrice, RetailPrice = formRetailPrice, Stock = formStock, Photo1 = formPhoto1, Photo2 = formPhoto2, Photo3 = formPhoto3 };
                 var result = await Api.CreateProductAsync(create);
-                if (result is null)
-                {
-                    formError = "Error al crear el producto";
-                    return;
-                }
+                if (result is null) { formError = "Error al crear el producto"; return; }
                 ToastService.Success("Producto creado");
             }
-
-            showForm = false;
-            await LoadData();
+            showForm = false; await LoadData();
         }
-        catch (Exception ex)
-        {
-            formError = "Error al guardar: " + ex.Message;
-        }
-        finally
-        {
-            isSaving = false;
-        }
+        catch (Exception ex) { formError = "Error al guardar: " + ex.Message; }
+        finally { isSaving = false; }
     }
 
-    private void ConfirmDelete(ProductDto product)
-    {
-        productToDelete = product;
-        showDeleteConfirm = true;
-    }
+    private void ConfirmDelete(ProductDto product) { productToDelete = product; showDeleteConfirm = true; }
 
     private async Task DeleteProduct()
     {
         if (productToDelete is null) return;
-
         try
         {
             var result = await Api.DeleteProductAsync(productToDelete.Id);
-            if (result)
-            {
-                ToastService.Success("Producto eliminado");
-                await LoadData();
-            }
-            else
-            {
-                ToastService.Error("Error al eliminar el producto");
-            }
+            if (result) { ToastService.Success("Producto eliminado"); await LoadData(); }
+            else { ToastService.Error("Error al eliminar el producto"); }
         }
-        catch (Exception ex)
-        {
-            ToastService.Error("Error: " + ex.Message);
-        }
-
-        showDeleteConfirm = false;
-        productToDelete = null;
+        catch (Exception ex) { ToastService.Error("Error: " + ex.Message); }
+        showDeleteConfirm = false; productToDelete = null;
     }
 
-    // --- Price Formatting ---
+    // ===== PUBLISH WIZARD METHODS =====
+    private async Task StartPublishWizard(ProductDto product)
+    {
+        publishingProduct = product; publishStep = 1; publishError = null; publishResult = null;
+        pubTitle = product.Title; pubDescription = product.Description;
+        pubPrice = product.RetailPrice; pubPriceFormatted = FormatPrice(product.RetailPrice);
+        pubStock = product.Stock > 0 ? product.Stock : 1;
+        pubCondition = "new"; pubListingType = "gold_special"; pubFreeShipping = true;
+        pubAccountId = 0; pubCategoryId = "";
+        categoryPredictions = null; categoryAttributes = null; attributeValues = new();
+        pubPhotos = new List<string>();
+        if (!string.IsNullOrEmpty(product.Photo1)) pubPhotos.Add(product.Photo1);
+        if (!string.IsNullOrEmpty(product.Photo2)) pubPhotos.Add(product.Photo2);
+        if (!string.IsNullOrEmpty(product.Photo3)) pubPhotos.Add(product.Photo3);
+        try
+        {
+            meliAccounts = await Api.GetMeliAccountsAsync();
+            if (meliAccounts != null && meliAccounts.Any(a => a.TokenValid))
+                pubAccountId = meliAccounts.First(a => a.TokenValid).Id;
+        }
+        catch { ToastService.Error("Error al cargar cuentas de MercadoLibre"); }
+        showPublishWizard = true;
+    }
+
+    private void ClosePublishWizard() { showPublishWizard = false; publishingProduct = null; publishResult = null; }
+    private async Task NextStep()
+    {
+        publishError = null;
+        if (publishStep == 1)
+        {
+            if (pubAccountId == 0) { publishError = "Selecciona una cuenta de MercadoLibre"; return; }
+            if (string.IsNullOrWhiteSpace(pubTitle)) { publishError = "El titulo es obligatorio"; return; }
+            if (pubPrice <= 0) { publishError = "El precio debe ser mayor a 0"; return; }
+            if (pubStock <= 0) { publishError = "El stock debe ser mayor a 0"; return; }
+            publishStep = 2;
+            if (categoryPredictions == null) await PredictCategory();
+        }
+        else if (publishStep == 2)
+        {
+            if (string.IsNullOrEmpty(pubCategoryId)) { publishError = "Selecciona una categoria"; return; }
+            publishStep = 3;
+        }
+    }
+
+    private void PreviousStep() { publishError = null; if (publishStep > 1) publishStep--; }
+
+    private async Task PredictCategory()
+    {
+        isLoadingCategories = true; StateHasChanged();
+        try
+        {
+            categoryPredictions = await Api.PredictCategoryAsync(pubTitle, pubAccountId);
+            if (categoryPredictions != null && categoryPredictions.Any())
+                await SelectCategory(categoryPredictions.First());
+        }
+        catch { ToastService.Error("Error al predecir categoria"); }
+        isLoadingCategories = false; StateHasChanged();
+    }
+
+    private async Task SelectCategory(CategoryPredictionDto cat)
+    {
+        pubCategoryId = cat.CategoryId; attributeValues = new();
+        await LoadCategoryAttributes();
+    }
+
+    private async Task LoadCategoryAttributes()
+    {
+        isLoadingAttributes = true; StateHasChanged();
+        try { categoryAttributes = await Api.GetCategoryAttributesAsync(pubCategoryId); }
+        catch { ToastService.Error("Error al cargar atributos"); }
+        isLoadingAttributes = false; StateHasChanged();
+    }
+
+    private async Task SuggestAttributesWithAI()
+    {
+        if (categoryAttributes == null || !categoryAttributes.Any()) return;
+        isSuggestingAttributes = true; StateHasChanged();
+        try
+        {
+            var request = new { title = pubTitle, description = pubDescription, brand = publishingProduct?.Brand, model = publishingProduct?.Model, categoryId = pubCategoryId, categoryName = categoryPredictions?.FirstOrDefault(c => c.CategoryId == pubCategoryId)?.CategoryName ?? "", attributes = categoryAttributes };
+            var suggestions = await Api.SuggestAttributesAsync(request);
+            if (suggestions != null)
+            {
+                foreach (var s in suggestions) attributeValues[s.AttributeId] = (s.ValueId, s.ValueName);
+                ToastService.Success("Se sugirieron " + suggestions.Count + " atributos");
+            }
+        }
+        catch { ToastService.Error("Error al obtener sugerencias de IA"); }
+        isSuggestingAttributes = false; StateHasChanged();
+    }
+
+    private string GetAttributeValue(string attrId) => attributeValues.TryGetValue(attrId, out var val) ? (val.valueId ?? "") : "";
+    private string GetAttributeTextValue(string attrId) => attributeValues.TryGetValue(attrId, out var val) ? (val.valueName ?? "") : "";
+
+    private void SetAttributeValue(string attrId, ChangeEventArgs e)
+    {
+        var valueId = e.Value?.ToString() ?? "";
+        if (string.IsNullOrEmpty(valueId)) { attributeValues.Remove(attrId); return; }
+        var attr = categoryAttributes?.FirstOrDefault(a => a.Id == attrId);
+        var valueName = attr?.Values.FirstOrDefault(v => v.Id == valueId)?.Name ?? valueId;
+        attributeValues[attrId] = (valueId, valueName);
+    }
+
+    private void SetAttributeTextValue(string attrId, ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString() ?? "";
+        if (string.IsNullOrEmpty(text)) { attributeValues.Remove(attrId); return; }
+        attributeValues[attrId] = (null, text);
+    }
+
+    private string GetDisplayValueForAttribute(string attrId)
+    {
+        if (!attributeValues.TryGetValue(attrId, out var val)) return "-";
+        return val.valueName ?? val.valueId ?? "-";
+    }
+    private async Task ExecutePublish()
+    {
+        publishError = null; isPublishing = true; StateHasChanged();
+        try
+        {
+            var request = new PublishItemRequest
+            {
+                ProductId = publishingProduct!.Id, MeliAccountId = pubAccountId, CategoryId = pubCategoryId,
+                Title = pubTitle, Description = pubDescription, Price = pubPrice, AvailableQuantity = pubStock,
+                Condition = pubCondition, ListingTypeId = pubListingType, FreeShipping = pubFreeShipping,
+                PictureUrls = pubPhotos,
+                Attributes = attributeValues.Select(kv => new PublishAttributeDto { Id = kv.Key, ValueId = kv.Value.valueId, ValueName = kv.Value.valueName }).ToList()
+            };
+            publishResult = await Api.PublishItemAsync(request);
+            if (publishResult != null && publishResult.Success) ToastService.Success("Publicacion creada en MercadoLibre");
+            else publishError = publishResult?.Error ?? "Error desconocido al publicar";
+        }
+        catch (Exception ex) { publishError = "Error: " + ex.Message; }
+        isPublishing = false; StateHasChanged();
+    }
+
     private string FormatPrice(decimal value)
     {
         var parts = value.ToString("F2").Split('.');
-        var intPart = parts[0];
-        var decPart = parts.Length > 1 ? parts[1] : "00";
+        var intPart = parts[0]; var decPart = parts.Length > 1 ? parts[1] : "00";
         var formatted = new System.Text.StringBuilder();
         for (int i = 0; i < intPart.Length; i++)
         {
@@ -487,14 +795,11 @@
 
     private string FormatPriceInput(string raw)
     {
-        if (raw.EndsWith(".") && !raw.Contains(','))
-            raw = raw[..^1] + ",";
+        if (raw.EndsWith(".") && !raw.Contains(',')) raw = raw[..^1] + ",";
         else if (!raw.Contains(',') && raw.Count(c => c == '.') == 1)
         {
-            var dotIdx = raw.IndexOf('.');
-            var afterDot = raw[(dotIdx + 1)..];
-            if (afterDot.Length <= 2 && afterDot.All(char.IsDigit))
-                raw = raw[..dotIdx] + "," + afterDot;
+            var dotIdx = raw.IndexOf('.'); var afterDot = raw[(dotIdx + 1)..];
+            if (afterDot.Length <= 2 && afterDot.All(char.IsDigit)) raw = raw[..dotIdx] + "," + afterDot;
         }
         var cleaned = new string(raw.Where(c => char.IsDigit(c) || c == ',').ToArray());
         var commaIdx = cleaned.IndexOf(',');
@@ -517,15 +822,7 @@
         return commaIdx >= 0 ? sb + "," + decPart : sb.ToString();
     }
 
-    private void OnFormCostPriceInput(ChangeEventArgs e)
-    {
-        formCostPriceFormatted = FormatPriceInput(e.Value?.ToString() ?? "");
-        formCostPrice = ParseFormattedPrice(formCostPriceFormatted);
-    }
-
-    private void OnFormRetailPriceInput(ChangeEventArgs e)
-    {
-        formRetailPriceFormatted = FormatPriceInput(e.Value?.ToString() ?? "");
-        formRetailPrice = ParseFormattedPrice(formRetailPriceFormatted);
-    }
+    private void OnFormCostPriceInput(ChangeEventArgs e) { formCostPriceFormatted = FormatPriceInput(e.Value?.ToString() ?? ""); formCostPrice = ParseFormattedPrice(formCostPriceFormatted); }
+    private void OnFormRetailPriceInput(ChangeEventArgs e) { formRetailPriceFormatted = FormatPriceInput(e.Value?.ToString() ?? ""); formRetailPrice = ParseFormattedPrice(formRetailPriceFormatted); }
+    private void OnPubPriceInput(ChangeEventArgs e) { pubPriceFormatted = FormatPriceInput(e.Value?.ToString() ?? ""); pubPrice = ParseFormattedPrice(pubPriceFormatted); }
 }
