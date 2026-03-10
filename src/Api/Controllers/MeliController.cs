@@ -303,7 +303,21 @@ public class MeliController : ControllerBase
         }
     }
 
-    [HttpPost("items/bulk-create-products")]
+    [HttpPost("items/{id}/create-product")]
+    public async Task<IActionResult> CreateProductFromItem(int id)
+    {
+        try
+        {
+            var result = await _itemService.BulkCreateProductsAsync(new List<int> { id });
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+        [HttpPost("items/bulk-create-products")]
     public async Task<IActionResult> BulkCreateProducts([FromBody] BulkCreateProductsRequest request)
     {
         if (request.Ids == null || !request.Ids.Any())

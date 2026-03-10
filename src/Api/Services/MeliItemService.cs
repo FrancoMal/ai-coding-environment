@@ -252,52 +252,64 @@ public class MeliItemService
 
         foreach (var item in toProcess)
         {
-            // Check SKU duplicate
-            if (!string.IsNullOrWhiteSpace(item.Sku))
+            try
             {
-                var skuLower = item.Sku.ToLowerInvariant();
-                if (skuMap.TryGetValue(skuLower, out var existing))
+                // Check SKU duplicate
+                if (!string.IsNullOrWhiteSpace(item.Sku))
                 {
-                    // Link to existing product instead of creating
-                    item.ProductId = existing.Id;
-                    item.UpdatedAt = DateTime.UtcNow;
-                    result.Skipped++;
-                    result.SkippedMessages.Add($"SKU {item.Sku} ya existe (producto: {existing.Title}) - se vinculo automaticamente");
-                    continue;
+                    var skuLower = item.Sku.ToLowerInvariant();
+                    if (skuMap.TryGetValue(skuLower, out var existing))
+                    {
+                        // Link to existing product instead of creating
+                        item.ProductId = existing.Id;
+                        item.UpdatedAt = DateTime.UtcNow;
+                        await _db.SaveChangesAsync();
+                        result.Skipped++;
+                        result.SkippedMessages.Add($"SKU {item.Sku} ya existe (producto: {existing.Title}) - se vinculo automaticamente");
+                        continue;
+                    }
                 }
+
+                // Create new product
+                var product = new Product
+                {
+                    Title = item.Title,
+                    Sku = item.Sku,
+                    RetailPrice = item.Price,
+                    Stock = item.AvailableQuantity,
+                    Photo1 = item.Thumbnail,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _db.Products.Add(product);
+                await _db.SaveChangesAsync();
+
+                // Link item to product
+                item.ProductId = product.Id;
+                item.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+
+                // Add to skuMap so next items with same SKU get detected
+                if (!string.IsNullOrWhiteSpace(item.Sku))
+                {
+                    var skuLower = item.Sku.ToLowerInvariant();
+                    if (!skuMap.ContainsKey(skuLower))
+                        skuMap[skuLower] = new { Sku = item.Sku, Title = product.Title, Id = product.Id };
+                }
+
+                result.Created++;
             }
-
-            // Create new product
-            var product = new Product
+            catch (Exception ex)
             {
-                Title = item.Title,
-                Sku = item.Sku,
-                RetailPrice = item.Price,
-                Stock = item.AvailableQuantity,
-                Photo1 = item.Thumbnail,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            };
+                // Detach failed entities to avoid corrupting the context
+                foreach (var entry in _db.ChangeTracker.Entries().Where(e => e.State == Microsoft.EntityFrameworkCore.EntityState.Added))
+                    entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
 
-            _db.Products.Add(product);
-            await _db.SaveChangesAsync();
-
-            // Link item to product
-            item.ProductId = product.Id;
-            item.UpdatedAt = DateTime.UtcNow;
-
-            // Add to skuMap so next items with same SKU get detected
-            if (!string.IsNullOrWhiteSpace(item.Sku))
-            {
-                var skuLower = item.Sku.ToLowerInvariant();
-                if (!skuMap.ContainsKey(skuLower))
-                    skuMap[skuLower] = new { Sku = item.Sku, Title = product.Title, Id = product.Id };
+                result.Skipped++;
+                result.SkippedMessages.Add($"Error en '{item.Title}': {ex.InnerException?.Message ?? ex.Message}");
             }
-
-            result.Created++;
         }
-
-        await _db.SaveChangesAsync();
 
         // Audit log
         var auditData = new

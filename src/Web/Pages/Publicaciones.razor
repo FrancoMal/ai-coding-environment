@@ -1604,6 +1604,70 @@
     .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.85rem; }
 </style>
 
+@if (showBulkCreateModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-card modal-small" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: whitesmoke;">
+                <h4 style="margin: 0;">Crear productos</h4>
+                @if (!isBulkCreating)
+                {
+                    <button class="btn-close" @onclick="CloseBulkCreateModal">&times;</button>
+                }
+            </div>
+            <div class="modal-body">
+                @if (!isBulkCreating && bulkCreateCurrent == 0)
+                {
+                    <p>Se van a crear productos para <strong>@selectedItems.Count</strong> publicaciones seleccionadas.</p>
+                    <p style="color: #6b7280; font-size: 0.85rem;">Si ya existe un producto con el mismo SKU, se vincula automaticamente.</p>
+                }
+                else
+                {
+                    <div style="margin-bottom: 1rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                            <span>@(isBulkCreating ? "Procesando..." : "Completado")</span>
+                            <span>@bulkCreateCurrent / @bulkCreateTotal</span>
+                        </div>
+                        <div style="background: #e5e7eb; border-radius: 8px; height: 8px; overflow: hidden;">
+                            <div style="background: #6366f1; height: 100%; border-radius: 8px; transition: width 0.3s; width: @(bulkCreateTotal > 0 ? (bulkCreateCurrent * 100 / bulkCreateTotal) : 0)%;"></div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 1.5rem; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                        <span style="color: #059669;">@bulkCreateCreated creados</span>
+                        <span style="color: #d97706;">@bulkCreateSkipped omitidos</span>
+                        @if (bulkCreateErrors.Any())
+                        {
+                            <span style="color: #dc2626;">@bulkCreateErrors.Count errores</span>
+                        }
+                    </div>
+
+                    @if (bulkCreateErrors.Any() && !isBulkCreating)
+                    {
+                        <div style="max-height: 120px; overflow-y: auto; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.8rem; color: #991b1b; margin-top: 0.5rem;">
+                            @foreach (var err in bulkCreateErrors)
+                            {
+                                <div>@err</div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+            <div class="modal-footer">
+                @if (!isBulkCreating && bulkCreateCurrent == 0)
+                {
+                    <button class="btn btn-secondary" @onclick="CloseBulkCreateModal">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="ConfirmBulkCreate">Confirmar</button>
+                }
+                else if (!isBulkCreating)
+                {
+                    <button class="btn btn-primary" @onclick="CloseBulkCreateModal">Cerrar</button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
 @if (showDeleteModal)
 {
     <div class="modal-overlay" @onclick="CloseDeleteModal">
@@ -1779,6 +1843,15 @@
     private HashSet<int> selectedItems = new();
     private bool showDeleteModal;
     private bool isDeleting;
+
+    // Bulk create products
+    private bool showBulkCreateModal;
+    private bool isBulkCreating;
+    private int bulkCreateTotal;
+    private int bulkCreateCurrent;
+    private int bulkCreateCreated;
+    private int bulkCreateSkipped;
+    private List<string> bulkCreateErrors = new();
 
     // Product linking
     private bool showCreateProductModal;
@@ -2141,33 +2214,61 @@
 
     private void ClearSelection() => selectedItems.Clear();
 
-    private async Task BulkCreateProducts()
+    private void BulkCreateProducts()
     {
         if (!selectedItems.Any()) return;
-        try
+        bulkCreateTotal = selectedItems.Count;
+        bulkCreateCurrent = 0;
+        bulkCreateCreated = 0;
+        bulkCreateSkipped = 0;
+        bulkCreateErrors.Clear();
+        showBulkCreateModal = true;
+    }
+
+    private void CloseBulkCreateModal()
+    {
+        showBulkCreateModal = false;
+        if (bulkCreateCurrent > 0)
         {
-            var result = await Api.BulkCreateProductsAsync(selectedItems.ToList());
-            if (result == null) return;
+            selectedItems.Clear();
+            _ = LoadItems();
+        }
+    }
 
-            if (result.Created > 0)
-                ToastService.Success($"Se crearon {result.Created} productos y se vincularon a sus publicaciones");
+    private async Task ConfirmBulkCreate()
+    {
+        isBulkCreating = true;
+        StateHasChanged();
 
-            if (result.Skipped > 0)
+        var ids = selectedItems.ToList();
+        foreach (var id in ids)
+        {
+            try
             {
-                foreach (var msg in result.SkippedMessages)
-                    ToastService.Info(msg);
+                var result = await Api.CreateProductFromItemAsync(id);
+                if (result != null)
+                {
+                    bulkCreateCreated += result.Created;
+                    bulkCreateSkipped += result.Skipped;
+                    foreach (var msg in result.SkippedMessages)
+                        bulkCreateErrors.Add(msg);
+                }
+            }
+            catch (Exception ex)
+            {
+                bulkCreateErrors.Add($"Error: {ex.Message}");
             }
 
-            if (result.Created == 0 && result.Skipped == 0)
-                ToastService.Info("No se crearon productos nuevos");
+            bulkCreateCurrent++;
+            StateHasChanged();
+            await Task.Delay(50); // Small delay for UI update
+        }
 
-            selectedItems.Clear();
-            await LoadItems();
-        }
-        catch (Exception ex)
-        {
-            ToastService.Error($"Error al crear productos: {ex.Message}");
-        }
+        isBulkCreating = false;
+        StateHasChanged();
+
+        if (bulkCreateCreated > 0)
+            ToastService.Success($"Se crearon {bulkCreateCreated} productos");
     }
 
         private void ShowBulkDeleteModal() => showDeleteModal = true;
