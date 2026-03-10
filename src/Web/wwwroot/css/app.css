@@ -2305,3 +2305,113 @@ textarea.form-input {
   font-size: 1.1rem;
   color: var(--text-primary);
 }
+
+/* Dashboard detail card */
+.dashboard-detail-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  border-top: 3px solid var(--primary);
+  margin-top: 1.5rem;
+  overflow: hidden;
+}
+.detail-card-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+}
+.detail-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-bg);
+  color: var(--primary);
+  flex-shrink: 0;
+}
+.detail-card-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.detail-card-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+  display: block;
+}
+.detail-card-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.detail-card-badge {
+  margin-left: auto;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.detail-card-badge.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+.detail-card-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.detail-card-table thead {
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+}
+.detail-card-table th {
+  padding: 8px 16px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.detail-card-table th:first-child {
+  text-align: left;
+}
+.detail-card-table td {
+  padding: 10px 16px;
+  text-align: right;
+  border-top: 1px solid #f3f4f6;
+}
+.detail-card-table td:first-child {
+  text-align: left;
+}
+.detail-card-table tbody tr:hover {
+  background: #f9fafb;
+}
+.text-warning-bold {
+  color: #d97706;
+  font-weight: 600;
+}
+
+/* Dashboard cards row */
+.dashboard-cards-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+@media (max-width: 900px) {
+  .dashboard-cards-row {
+    grid-template-columns: 1fr;
+  }
+}
+.detail-card-icon.primary {
+  background: var(--primary-bg);
+  color: var(--primary);
+}
+.detail-card-icon.info {
+  background: var(--info-bg);
+  color: var(--info);
+}

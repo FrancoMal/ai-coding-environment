@@ -9,23 +9,26 @@
     <p class="view-subtitle">Panel de control</p>
 </div>
 
-<div class="stats-grid">
-    <StatCard Icon="@SvgIcons.Tag" Value="@totalItems" Label="Publicaciones" Variant="primary" />
-    <StatCard Icon="@SvgIcons.Box" Value="@totalProducts" Label="Productos" Variant="info" />
-</div>
+<div class="dashboard-cards-row">
+    <div class="dashboard-detail-card">
+        <div class="detail-card-header">
+            <div class="detail-card-icon primary">@SvgIcons.Tag</div>
+            <div>
+                <span class="detail-card-value">@totalItems</span>
+                <span class="detail-card-label">Publicaciones</span>
+            </div>
+            <div class="detail-card-badge warning">@itemsSinProducto sin producto</div>
+        </div>
 
-@if (accountStats.Any())
-{
-    <div class="dashboard-section">
-        <h3>Detalle por cuenta</h3>
-        <div class="table-responsive">
-            <table class="data-table">
+        @if (accountStats.Any())
+        {
+            <table class="detail-card-table">
                 <thead>
                     <tr>
                         <th>Cuenta</th>
-                        <th style="text-align:right">Publicaciones</th>
-                        <th style="text-align:right">Con producto</th>
-                        <th style="text-align:right">Sin producto</th>
+                        <th>Publicaciones</th>
+                        <th>Con producto</th>
+                        <th>Sin producto</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -33,21 +36,51 @@
                     {
                         <tr>
                             <td><strong>@acc.Nickname</strong></td>
-                            <td style="text-align:right">@acc.TotalItems</td>
-                            <td style="text-align:right">@acc.ItemsConProducto</td>
-                            <td style="text-align:right; @(acc.ItemsSinProducto > 0 ? "color: #d97706; font-weight: 600;" : "")">@acc.ItemsSinProducto</td>
+                            <td>@acc.TotalItems</td>
+                            <td>@acc.ItemsConProducto</td>
+                            <td class="@(acc.ItemsSinProducto > 0 ? "text-warning-bold" : "")">@acc.ItemsSinProducto</td>
                         </tr>
                     }
                 </tbody>
             </table>
-        </div>
+        }
     </div>
-}
+
+    <div class="dashboard-detail-card">
+        <div class="detail-card-header">
+            <div class="detail-card-icon info">@SvgIcons.Box</div>
+            <div>
+                <span class="detail-card-value">@totalProducts</span>
+                <span class="detail-card-label">Productos</span>
+            </div>
+            <div class="detail-card-badge warning">@productosSinItems sin publicacion</div>
+        </div>
+
+        @if (accountStats.Any())
+        {
+            <table class="detail-card-table">
+                <thead>
+                    <tr>
+                        <th>Cuenta</th>
+                        <th>Productos vinculados</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var acc in accountStats)
+                    {
+                        <tr>
+                            <td><strong>@acc.Nickname</strong></td>
+                            <td>@acc.ProductosVinculados</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
 
 @code {
     private string username = "usuario";
-    private string totalUsers = "--";
-    private string systemStatus = "--";
     private string totalItems = "--";
     private string totalProducts = "--";
     private string itemsSinProducto = "--";
@@ -67,8 +100,6 @@
             var stats = await Api.GetDashboardStatsAsync();
             if (stats is not null)
             {
-                totalUsers = stats.TotalUsers.ToString();
-                systemStatus = stats.SystemStatus;
                 totalItems = stats.TotalItems.ToString();
                 totalProducts = stats.TotalProducts.ToString();
                 itemsSinProducto = stats.ItemsSinProducto.ToString();
@@ -78,8 +109,7 @@
         }
         catch
         {
-            totalUsers = "1";
-            systemStatus = "Activo";
+            // defaults already set
         }
     }
 }

@@ -20,7 +20,6 @@ public class DashboardController : ControllerBase
     [HttpGet("stats")]
     public async Task<IActionResult> GetStats()
     {
-        var totalUsers = await _db.Users.CountAsync(u => u.IsActive);
         var totalItems = await _db.MeliItems.CountAsync();
         var totalProducts = await _db.Products.CountAsync();
         var itemsSinProducto = await _db.MeliItems.CountAsync(i => i.ProductId == null);
@@ -37,14 +36,13 @@ public class DashboardController : ControllerBase
                     nickname = a.Nickname,
                     totalItems = items.Count(),
                     itemsConProducto = items.Count(i => i.ProductId != null),
-                    itemsSinProducto = items.Count(i => i.ProductId == null)
+                    itemsSinProducto = items.Count(i => i.ProductId == null),
+                    productosVinculados = items.Where(i => i.ProductId != null).Select(i => i.ProductId).Distinct().Count()
                 })
             .ToListAsync();
 
         return Ok(new
         {
-            totalUsers,
-            systemStatus = "Online",
             totalItems,
             totalProducts,
             itemsSinProducto,
