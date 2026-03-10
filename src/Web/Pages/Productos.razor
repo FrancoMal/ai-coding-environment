@@ -457,7 +457,7 @@
             </div>
             <div class="modal-footer" style="display: flex; justify-content: space-between;">
                 <div>
-                    @if (publishStep > 1 && publishResult == null)
+                    @if (publishStep > 1 && (publishResult == null || !publishResult.Success))
                     {
                         <button class="btn btn-secondary" @onclick="PreviousStep">Anterior</button>
                     }
@@ -681,7 +681,7 @@
         }
     }
 
-    private void PreviousStep() { publishError = null; if (publishStep > 1) publishStep--; }
+    private void PreviousStep() { publishError = null; publishResult = null; if (publishStep > 1) publishStep--; }
 
     private async Task PredictCategory()
     {
