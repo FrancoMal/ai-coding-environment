@@ -684,6 +684,10 @@ button {
   border-top-color: var(--info);
 }
 
+.stat-card--warning {
+  border-top-color: #f59e0b;
+}
+
 .stat-card-icon {
   width: 44px;
   height: 44px;
@@ -702,6 +706,11 @@ button {
 .stat-card--info .stat-card-icon {
   background: var(--info-bg);
   color: var(--info);
+}
+
+.stat-card--warning .stat-card-icon {
+  background: #fef3c7;
+  color: #d97706;
 }
 
 .stat-card-icon svg {
@@ -2282,3 +2291,17 @@ textarea.form-input {
   z-index: 99;
 }
 
+
+/* Dashboard section */
+.dashboard-section {
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+}
+.dashboard-section h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}

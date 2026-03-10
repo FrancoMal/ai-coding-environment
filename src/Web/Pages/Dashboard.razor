@@ -12,26 +12,51 @@
 <div class="stats-grid">
     <StatCard Icon="@SvgIcons.Users" Value="@totalUsers" Label="Usuarios activos" Variant="primary" />
     <StatCard Icon="@SvgIcons.Check" Value="@systemStatus" Label="Estado del sistema" Variant="info" />
+    <StatCard Icon="@SvgIcons.Tag" Value="@totalItems" Label="Publicaciones" Variant="primary" />
+    <StatCard Icon="@SvgIcons.Box" Value="@totalProducts" Label="Productos" Variant="info" />
+    <StatCard Icon="@SvgIcons.AlertTriangle" Value="@itemsSinProducto" Label="Publicaciones sin producto" Variant="warning" />
+    <StatCard Icon="@SvgIcons.AlertTriangle" Value="@productosSinItems" Label="Productos sin publicacion" Variant="warning" />
 </div>
 
-<div class="template-message">
-    <div class="template-message-icon">@SvgIcons.Code</div>
-    <h3>Este es tu template base</h3>
-    <p>Usa <strong>Claude Code</strong> para personalizarlo y agregar las funcionalidades que necesites.
-    Podes agregar nuevas paginas, conectar APIs, crear formularios y mucho mas.</p>
-    <div class="template-suggestions">
-        <span class="suggestion-tag">Agregar tablas de datos</span>
-        <span class="suggestion-tag">Conectar una API externa</span>
-        <span class="suggestion-tag">Crear formularios CRUD</span>
-        <span class="suggestion-tag">Agregar graficos</span>
-        <span class="suggestion-tag">Implementar notificaciones</span>
+@if (accountStats.Any())
+{
+    <div class="dashboard-section">
+        <h3>Detalle por cuenta</h3>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Cuenta</th>
+                        <th style="text-align:right">Publicaciones</th>
+                        <th style="text-align:right">Con producto</th>
+                        <th style="text-align:right">Sin producto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var acc in accountStats)
+                    {
+                        <tr>
+                            <td><strong>@acc.Nickname</strong></td>
+                            <td style="text-align:right">@acc.TotalItems</td>
+                            <td style="text-align:right">@acc.ItemsConProducto</td>
+                            <td style="text-align:right; @(acc.ItemsSinProducto > 0 ? "color: #d97706; font-weight: 600;" : "")">@acc.ItemsSinProducto</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
-</div>
+}
 
 @code {
     private string username = "usuario";
     private string totalUsers = "--";
     private string systemStatus = "--";
+    private string totalItems = "--";
+    private string totalProducts = "--";
+    private string itemsSinProducto = "--";
+    private string productosSinItems = "--";
+    private List<AccountStatsRow> accountStats = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -48,6 +73,11 @@
             {
                 totalUsers = stats.TotalUsers.ToString();
                 systemStatus = stats.SystemStatus;
+                totalItems = stats.TotalItems.ToString();
+                totalProducts = stats.TotalProducts.ToString();
+                itemsSinProducto = stats.ItemsSinProducto.ToString();
+                productosSinItems = stats.ProductosSinItems.ToString();
+                accountStats = stats.AccountStats;
             }
         }
         catch

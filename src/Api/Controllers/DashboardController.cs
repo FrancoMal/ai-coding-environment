@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Api.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,6 +21,35 @@ public class DashboardController : ControllerBase
     public async Task<IActionResult> GetStats()
     {
         var totalUsers = await _db.Users.CountAsync(u => u.IsActive);
-        return Ok(new { totalUsers, systemStatus = "Online" });
+        var totalItems = await _db.MeliItems.CountAsync();
+        var totalProducts = await _db.Products.CountAsync();
+        var itemsSinProducto = await _db.MeliItems.CountAsync(i => i.ProductId == null);
+        var productosSinItems = await _db.Products.CountAsync(p => !_db.MeliItems.Any(i => i.ProductId == p.Id));
+
+        var accountStats = await _db.MeliAccounts
+            .GroupJoin(
+                _db.MeliItems,
+                a => a.Id,
+                i => i.MeliAccountId,
+                (a, items) => new
+                {
+                    accountId = a.Id,
+                    nickname = a.Nickname,
+                    totalItems = items.Count(),
+                    itemsConProducto = items.Count(i => i.ProductId != null),
+                    itemsSinProducto = items.Count(i => i.ProductId == null)
+                })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            totalUsers,
+            systemStatus = "Online",
+            totalItems,
+            totalProducts,
+            itemsSinProducto,
+            productosSinItems,
+            accountStats
+        });
     }
 }
