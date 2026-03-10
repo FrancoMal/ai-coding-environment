@@ -27,6 +27,7 @@ public class MeliItemService
     {
         var query = _db.MeliItems
             .Include(i => i.MeliAccount)
+            .Include(i => i.Product)
             .AsQueryable();
 
         if (meliAccountId.HasValue)
@@ -45,7 +46,8 @@ public class MeliItemService
                 i.AvailableQuantity, i.SoldQuantity, i.Status,
                 i.Condition, i.ListingTypeId, i.InstallmentTag, i.FreeShipping, i.Thumbnail, i.Permalink,
                 i.Sku, i.UserProductId, i.FamilyId, i.FamilyName,
-                i.DateCreated, i.LastUpdated))
+                i.DateCreated, i.LastUpdated,
+                i.ProductId, i.Product != null ? i.Product.Title : null))
             .ToListAsync();
 
         return new MeliItemsResponse(items, total);
@@ -55,6 +57,7 @@ public class MeliItemService
     {
         var item = await _db.MeliItems
             .Include(i => i.MeliAccount)
+            .Include(i => i.Product)
             .FirstOrDefaultAsync(i => i.MeliItemId == meliItemId);
 
         if (item is null)
@@ -143,7 +146,58 @@ public class MeliItemService
             item.AvailableQuantity, item.SoldQuantity, item.Status,
             item.Condition, item.ListingTypeId, item.InstallmentTag, item.FreeShipping, item.Thumbnail, item.Permalink,
             item.Sku, item.UserProductId, item.FamilyId, item.FamilyName,
-            item.DateCreated, item.LastUpdated);
+            item.DateCreated, item.LastUpdated,
+            item.ProductId, item.Product?.Title);
+    }
+
+    public async Task<MeliItemDto> LinkToProductAsync(string meliItemId, int productId)
+    {
+        var item = await _db.MeliItems
+            .Include(i => i.MeliAccount)
+            .Include(i => i.Product)
+            .FirstOrDefaultAsync(i => i.MeliItemId == meliItemId);
+        if (item is null) throw new Exception("Item no encontrado");
+
+        var product = await _db.Products.FindAsync(productId);
+        if (product is null) throw new Exception("Producto no encontrado");
+
+        item.ProductId = productId;
+        item.Product = product;
+        item.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        var nickname = item.MeliAccount?.Nickname ?? "Desconocida";
+        return new MeliItemDto(
+            item.Id, item.MeliItemId, item.MeliAccountId, nickname,
+            item.Title, item.CategoryId, item.CategoryPath, item.Price, item.OriginalPrice, item.CurrencyId,
+            item.AvailableQuantity, item.SoldQuantity, item.Status,
+            item.Condition, item.ListingTypeId, item.InstallmentTag, item.FreeShipping, item.Thumbnail, item.Permalink,
+            item.Sku, item.UserProductId, item.FamilyId, item.FamilyName,
+            item.DateCreated, item.LastUpdated,
+            item.ProductId, item.Product?.Title);
+    }
+
+    public async Task<MeliItemDto> UnlinkProductAsync(string meliItemId)
+    {
+        var item = await _db.MeliItems
+            .Include(i => i.MeliAccount)
+            .FirstOrDefaultAsync(i => i.MeliItemId == meliItemId);
+        if (item is null) throw new Exception("Item no encontrado");
+
+        item.ProductId = null;
+        item.Product = null;
+        item.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        var nickname = item.MeliAccount?.Nickname ?? "Desconocida";
+        return new MeliItemDto(
+            item.Id, item.MeliItemId, item.MeliAccountId, nickname,
+            item.Title, item.CategoryId, item.CategoryPath, item.Price, item.OriginalPrice, item.CurrencyId,
+            item.AvailableQuantity, item.SoldQuantity, item.Status,
+            item.Condition, item.ListingTypeId, item.InstallmentTag, item.FreeShipping, item.Thumbnail, item.Permalink,
+            item.Sku, item.UserProductId, item.FamilyId, item.FamilyName,
+            item.DateCreated, item.LastUpdated,
+            null, null);
     }
 
     public async Task<int> DeleteItemsAsync(List<int> ids)
@@ -828,5 +882,65 @@ public class MeliItemService
         result.NetAmount = Math.Round(price - result.SaleFeeAmount - result.ListingFeeAmount - result.ShippingCost, 2);
 
         return result;
+    }
+
+    public async Task<MeliItemDetailsDto?> GetItemDetailsAsync(string meliItemId)
+    {
+        var item = await _db.MeliItems
+            .Include(i => i.MeliAccount)
+            .FirstOrDefaultAsync(i => i.MeliItemId == meliItemId);
+        if (item?.MeliAccount is null) return null;
+
+        var token = await _accountService.GetValidTokenAsync(item.MeliAccount);
+        if (token is null) return null;
+
+        var http = _httpFactory.CreateClient();
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var pictures = new List<string>();
+        string? description = null;
+
+        try
+        {
+            // Fetch item details (includes pictures array)
+            var itemResp = await http.GetAsync($"https://api.mercadolibre.com/items/{meliItemId}");
+            if (itemResp.IsSuccessStatusCode)
+            {
+                var json = await itemResp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("pictures", out var pics) && pics.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var pic in pics.EnumerateArray())
+                    {
+                        if (pictures.Count >= 3) break;
+                        var url = pic.TryGetProperty("secure_url", out var su) ? su.GetString()
+                                : pic.TryGetProperty("url", out var u) ? u.GetString() : null;
+                        if (!string.IsNullOrEmpty(url))
+                            pictures.Add(url);
+                    }
+                }
+            }
+        }
+        catch { /* pictures fetch failed, continue */ }
+
+        try
+        {
+            // Fetch description
+            var descResp = await http.GetAsync($"https://api.mercadolibre.com/items/{meliItemId}/description");
+            if (descResp.IsSuccessStatusCode)
+            {
+                var json = await descResp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("plain_text", out var pt))
+                    description = pt.GetString();
+                if (string.IsNullOrWhiteSpace(description) && doc.RootElement.TryGetProperty("text", out var t))
+                    description = t.GetString();
+            }
+        }
+        catch { /* description fetch failed, continue */ }
+
+        return new MeliItemDetailsDto(pictures, description);
     }
 }

@@ -22,6 +22,9 @@ public class Product
     [MaxLength(100)]
     public string? Model { get; set; }
 
+    [MaxLength(100)]
+    public string? Sku { get; set; }
+
     public string? Photo1 { get; set; }
     public string? Photo2 { get; set; }
     public string? Photo3 { get; set; }
@@ -39,4 +42,6 @@ public class Product
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? UpdatedAt { get; set; }
+
+    public ICollection<MeliItem> MeliItems { get; set; } = new List<MeliItem>();
 }

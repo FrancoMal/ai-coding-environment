@@ -97,6 +97,26 @@ public class ApiClient
         return response.IsSuccessStatusCode;
     }
 
+    // --- MeLi Item Details (pictures + description) ---
+    public async Task<MeliItemDetailsDto?> GetMeliItemDetailsAsync(string meliItemId)
+    {
+        return await GetAsync<MeliItemDetailsDto>($"/api/meli/items/{meliItemId}/details");
+    }
+
+        // --- Item-Product Linking ---
+    public async Task<MeliItemDto?> LinkItemToProductAsync(string meliItemId, int productId)
+    {
+        return await PutAsync<MeliItemDto>($"/api/meli/items/{meliItemId}/link", new { productId });
+    }
+
+    public async Task<MeliItemDto?> UnlinkItemProductAsync(string meliItemId)
+    {
+        await SetAuthHeaderAsync();
+        var response = await _http.DeleteAsync($"/api/meli/items/{meliItemId}/link");
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<MeliItemDto>();
+    }
+
     // --- Products ---
     public async Task<List<ProductDto>?> GetProductsAsync()
     {

@@ -322,3 +322,23 @@ BEGIN
     );
 END
 GO
+
+-- Add ProductId FK to MeliItems (link publications to products)
+IF EXISTS (SELECT * FROM sysobjects WHERE name='MeliItems' AND xtype='U')
+   AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MeliItems') AND name = 'ProductId')
+BEGIN
+    ALTER TABLE MeliItems ADD ProductId INT NULL;
+    ALTER TABLE MeliItems ADD CONSTRAINT FK_MeliItems_Products
+        FOREIGN KEY (ProductId) REFERENCES Products(Id) ON DELETE SET NULL;
+    CREATE INDEX IX_MeliItems_ProductId ON MeliItems (ProductId);
+END
+GO
+
+
+-- Add SKU to Products
+IF EXISTS (SELECT * FROM sysobjects WHERE name='Products' AND xtype='U')
+   AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Products') AND name = 'Sku')
+BEGIN
+    ALTER TABLE Products ADD Sku NVARCHAR(100) NULL;
+END
+GO

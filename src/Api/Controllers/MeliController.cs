@@ -210,6 +210,42 @@ public class MeliController : ControllerBase
         }
     }
 
+    [HttpGet("items/{meliItemId}/details")]
+    public async Task<IActionResult> GetItemDetails(string meliItemId)
+    {
+        var details = await _itemService.GetItemDetailsAsync(meliItemId);
+        if (details is null) return NotFound();
+        return Ok(details);
+    }
+
+        [HttpPut("items/{meliItemId}/link")]
+    public async Task<IActionResult> LinkItemToProduct(string meliItemId, [FromBody] LinkItemToProductRequest request)
+    {
+        try
+        {
+            var result = await _itemService.LinkToProductAsync(meliItemId, request.ProductId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete("items/{meliItemId}/link")]
+    public async Task<IActionResult> UnlinkItemProduct(string meliItemId)
+    {
+        try
+        {
+            var result = await _itemService.UnlinkProductAsync(meliItemId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     [HttpPost("items/bulk-delete")]
     public async Task<IActionResult> BulkDeleteItems([FromBody] BulkDeleteRequest request)
     {

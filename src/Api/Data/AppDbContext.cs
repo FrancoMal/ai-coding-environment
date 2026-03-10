@@ -70,6 +70,11 @@ public class AppDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(i => i.MeliAccountId)
                   .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(i => i.ProductId);
+            entity.HasOne(i => i.Product)
+                  .WithMany(p => p.MeliItems)
+                  .HasForeignKey(i => i.ProductId)
+                  .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<AuditLog>(entity =>

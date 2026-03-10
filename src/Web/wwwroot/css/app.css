@@ -1656,3 +1656,132 @@ textarea.form-input {
   resize: vertical;
   min-height: 60px;
 }
+
+/* --- Product Linking in Publicaciones --- */
+.td-product {
+    min-width: 140px;
+    max-width: 180px;
+}
+
+.product-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #dcfce7;
+    color: #166534;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.product-badge-unlink {
+    background: none;
+    border: none;
+    color: #dc2626;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0 2px;
+    line-height: 1;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+}
+.product-badge-unlink:hover {
+    opacity: 1;
+}
+
+.product-actions-inline {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.create-product-btn,
+.link-product-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    color: #6b7280;
+    transition: all 0.15s;
+    padding: 0;
+}
+.create-product-btn:hover {
+    background: #dcfce7;
+    border-color: #22c55e;
+    color: #166534;
+}
+.link-product-btn:hover {
+    background: #dbeafe;
+    border-color: #3b82f6;
+    color: #1d4ed8;
+}
+
+/* Link Product Modal */
+.link-product-list {
+    max-height: 250px;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    margin-top: 0.5rem;
+}
+
+.link-product-option {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-bottom: 1px solid #f3f4f6;
+    background: white;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s;
+}
+.link-product-option:last-child {
+    border-bottom: none;
+}
+.link-product-option:hover {
+    background: #f0fdf4;
+}
+
+.link-product-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #111827;
+}
+
+.link-product-meta {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+/* --- Create Product Image Previews --- */
+.create-product-images {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 1rem;
+    padding: 8px;
+    background: #f9fafb;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+}
+
+.create-product-img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+}

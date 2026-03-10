@@ -27,6 +27,8 @@ public class MeliItemDto
     public string? FamilyName { get; set; }
     public DateTime? DateCreated { get; set; }
     public DateTime? LastUpdated { get; set; }
+    public int? ProductId { get; set; }
+    public string? ProductTitle { get; set; }
 }
 
 public class MeliItemsResponse

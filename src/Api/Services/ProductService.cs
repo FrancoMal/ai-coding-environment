@@ -20,7 +20,7 @@ public class ProductService
             .OrderByDescending(p => p.CreatedAt)
             .Select(p => new ProductListDto(
                 p.Id, p.Title, p.Description,
-                p.Brand, p.Model,
+                p.Brand, p.Model, p.Sku,
                 p.Photo1, p.Photo2, p.Photo3,
                 p.CostPrice, p.RetailPrice, p.Stock,
                 p.IsActive, p.CreatedAt, p.UpdatedAt
@@ -34,7 +34,7 @@ public class ProductService
             .Where(p => p.Id == id)
             .Select(p => new ProductListDto(
                 p.Id, p.Title, p.Description,
-                p.Brand, p.Model,
+                p.Brand, p.Model, p.Sku,
                 p.Photo1, p.Photo2, p.Photo3,
                 p.CostPrice, p.RetailPrice, p.Stock,
                 p.IsActive, p.CreatedAt, p.UpdatedAt
@@ -50,6 +50,7 @@ public class ProductService
             Description = request.Description,
             Brand = request.Brand,
             Model = request.Model,
+            Sku = request.Sku,
             Photo1 = request.Photo1,
             Photo2 = request.Photo2,
             Photo3 = request.Photo3,
@@ -65,7 +66,7 @@ public class ProductService
 
         return new ProductListDto(
             product.Id, product.Title, product.Description,
-            product.Brand, product.Model,
+            product.Brand, product.Model, product.Sku,
             product.Photo1, product.Photo2, product.Photo3,
             product.CostPrice, product.RetailPrice, product.Stock,
             product.IsActive, product.CreatedAt, product.UpdatedAt
@@ -81,6 +82,7 @@ public class ProductService
         if (request.Description is not null) product.Description = request.Description;
         if (request.Brand is not null) product.Brand = request.Brand;
         if (request.Model is not null) product.Model = request.Model;
+        if (request.Sku is not null) product.Sku = request.Sku == "" ? null : request.Sku;
         if (request.Photo1 is not null) product.Photo1 = request.Photo1 == "" ? null : request.Photo1;
         if (request.Photo2 is not null) product.Photo2 = request.Photo2 == "" ? null : request.Photo2;
         if (request.Photo3 is not null) product.Photo3 = request.Photo3 == "" ? null : request.Photo3;
@@ -94,7 +96,7 @@ public class ProductService
 
         return new ProductListDto(
             product.Id, product.Title, product.Description,
-            product.Brand, product.Model,
+            product.Brand, product.Model, product.Sku,
             product.Photo1, product.Photo2, product.Photo3,
             product.CostPrice, product.RetailPrice, product.Stock,
             product.IsActive, product.CreatedAt, product.UpdatedAt

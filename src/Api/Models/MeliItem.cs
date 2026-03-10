@@ -29,5 +29,8 @@ public class MeliItem
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 
+    public int? ProductId { get; set; }
+    public Product? Product { get; set; }
+
     public MeliAccount? MeliAccount { get; set; }
 }

@@ -245,6 +245,12 @@
                                     </div>
                                 }
                             </th>
+                            <th class="th-filterable">
+                                <div class="th-filter-inner">
+                                    <input type="text" class="th-filter-input @(IsFilterActive("producto") ? "has-filter" : "")" placeholder="Producto"
+                                           value='@GetTextFilter("producto")' @oninput='(e) => SetTextFilter("producto", e.Value?.ToString() ?? "")' />
+                                </div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -294,6 +300,22 @@
                                     <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
                                     <td>@GetListingTypeLabel(item.ListingTypeId)</td>
                                     <td>@item.AccountNickname</td>
+                                    <td class="td-product" @onclick:stopPropagation="true">
+                                        @if (item.ProductId.HasValue)
+                                        {
+                                            <span class="product-badge" title="@item.ProductTitle">
+                                                @Truncate(item.ProductTitle ?? "", 18)
+                                                <button class="product-badge-unlink" @onclick="() => UnlinkProduct(item)" title="Desvincular">&times;</button>
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <div class="product-actions-inline">
+                                                <button class="create-product-btn" @onclick="() => OpenCreateProductFromItem(item)" title="Crear producto">+</button>
+                                                <button class="link-product-btn" @onclick="() => OpenLinkProductDropdown(item)" title="Vincular existente">&#128279;</button>
+                                            </div>
+                                        }
+                                    </td>
                                 </tr>
                             </Virtualize>
                         }
@@ -302,7 +324,7 @@
                             @foreach (var family in GetFamilyGroups())
                             {
                                 <tr class="group-header-row">
-                                    <td colspan="10">
+                                    <td colspan="11">
                                         <strong>@(family.FamilyName ?? "Sin familia")</strong>
                                         <small class="text-muted" style="margin-left: 0.5rem;">(@family.Items.Count items)</small>
                                     </td>
@@ -352,6 +374,22 @@
                                         <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
                                         <td>@GetListingTypeLabel(item.ListingTypeId)</td>
                                         <td>@item.AccountNickname</td>
+                                        <td class="td-product" @onclick:stopPropagation="true">
+                                            @if (item.ProductId.HasValue)
+                                            {
+                                                <span class="product-badge" title="@item.ProductTitle">
+                                                    @Truncate(item.ProductTitle ?? "", 18)
+                                                    <button class="product-badge-unlink" @onclick="() => UnlinkProduct(item)" title="Desvincular">&times;</button>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <div class="product-actions-inline">
+                                                    <button class="create-product-btn" @onclick="() => OpenCreateProductFromItem(item)" title="Crear producto">+</button>
+                                                    <button class="link-product-btn" @onclick="() => OpenLinkProductDropdown(item)" title="Vincular existente">&#128279;</button>
+                                                </div>
+                                            }
+                                        </td>
                                     </tr>
                                 }
                             }
@@ -363,7 +401,7 @@
                                 @if (product.Items.Count > 1)
                                 {
                                     <tr class="group-header-row">
-                                        <td colspan="10">
+                                        <td colspan="11">
                                             <strong>@Truncate(product.Title, 60)</strong>
                                             <small class="text-muted" style="margin-left: 0.5rem;">(@product.Items.Count variaciones)</small>
                                         </td>
@@ -1574,6 +1612,128 @@
     </div>
 }
 
+
+@if (showCreateProductModal && createProductItem is not null)
+{
+    <div class="modal-overlay" @onclick="CloseCreateProductModal">
+        <div class="modal-card modal-wide" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: whitesmoke;">
+                <h3 style="margin:0; font-size:1rem;">Crear Producto desde Publicacion</h3>
+                <button class="modal-close" @onclick="CloseCreateProductModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.8rem; color: #6b7280; margin-bottom: 1rem;">
+                    Publicacion: <strong>@createProductItem.MeliItemId</strong> - @Truncate(createProductItem.Title, 60)
+                </p>
+                @if (isLoadingDetails)
+                {
+                    <p style="font-size: 0.8rem; color: #3b82f6; margin-bottom: 0.5rem;">Cargando imagenes y descripcion de MercadoLibre...</p>
+                }
+                @if (!string.IsNullOrEmpty(newProductPhoto1) || !string.IsNullOrEmpty(newProductPhoto2) || !string.IsNullOrEmpty(newProductPhoto3))
+                {
+                    <div class="create-product-images">
+                        @if (!string.IsNullOrEmpty(newProductPhoto1))
+                        {
+                            <img src="@newProductPhoto1" alt="Foto 1" class="create-product-img" />
+                        }
+                        @if (!string.IsNullOrEmpty(newProductPhoto2))
+                        {
+                            <img src="@newProductPhoto2" alt="Foto 2" class="create-product-img" />
+                        }
+                        @if (!string.IsNullOrEmpty(newProductPhoto3))
+                        {
+                            <img src="@newProductPhoto3" alt="Foto 3" class="create-product-img" />
+                        }
+                    </div>
+                }
+                <div class="form-group">
+                    <label class="form-label">Titulo *</label>
+                    <input type="text" class="form-input" @bind="newProductTitle" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Descripcion</label>
+                    <textarea class="form-input" rows="3" @bind="newProductDescription"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">SKU</label>
+                        <input type="text" class="form-input" @bind="newProductSku" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Marca</label>
+                        <input type="text" class="form-input" @bind="newProductBrand" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Modelo</label>
+                        <input type="text" class="form-input" @bind="newProductModel" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Precio de Costo</label>
+                        <input type="number" class="form-input" @bind="newProductCostPrice" step="0.01" min="0" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">PVP</label>
+                        <input type="number" class="form-input" @bind="newProductRetailPrice" step="0.01" min="0" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Stock</label>
+                        <input type="number" class="form-input" @bind="newProductStock" min="0" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseCreateProductModal">Cancelar</button>
+                <button class="btn btn-primary" @onclick="CreateProductFromItem" disabled="@isCreatingProduct">
+                    @(isCreatingProduct ? "Creando..." : "Crear y Vincular")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showLinkProductModal && linkProductItem is not null)
+{
+    <div class="modal-overlay" @onclick="CloseLinkProductModal">
+        <div class="modal-card" style="max-width: 420px;" @onclick:stopPropagation="true">
+            <div class="modal-header" style="background: whitesmoke;">
+                <h3 style="margin:0; font-size:1rem;">Vincular a Producto</h3>
+                <button class="modal-close" @onclick="CloseLinkProductModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.8rem; color: #6b7280; margin-bottom: 1rem;">
+                    Publicacion: <strong>@linkProductItem.MeliItemId</strong>
+                </p>
+                @if (allProducts is null || !allProducts.Any())
+                {
+                    <p class="text-muted">No hay productos creados. Primero crea un producto.</p>
+                }
+                else
+                {
+                    <div class="form-group">
+                        <label class="form-label">Buscar producto</label>
+                        <input type="text" class="form-input" placeholder="Escribi para filtrar..." @oninput="OnLinkSearchInput" />
+                    </div>
+                    <div class="link-product-list">
+                        @foreach (var p in GetFilteredProducts())
+                        {
+                            var prod = p;
+                            <button class="link-product-option" @onclick="() => LinkToProduct(prod.Id)">
+                                <span class="link-product-title">@Truncate(prod.Title, 40)</span>
+                                <span class="link-product-meta">$@prod.RetailPrice.ToString("N2") | Stock: @prod.Stock</span>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseLinkProductModal">Cancelar</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<MeliItemDto>? items;
     private bool isLoading = true;
@@ -1595,6 +1755,27 @@
     private HashSet<int> selectedItems = new();
     private bool showDeleteModal;
     private bool isDeleting;
+
+    // Product linking
+    private bool showCreateProductModal;
+    private MeliItemDto? createProductItem;
+    private string newProductTitle = "";
+    private string newProductDescription = "";
+    private string newProductBrand = "";
+    private string newProductModel = "";
+    private decimal newProductCostPrice;
+    private decimal newProductRetailPrice;
+    private int newProductStock;
+    private bool isCreatingProduct;
+    private string newProductSku = "";
+    private string newProductPhoto1 = "";
+    private string newProductPhoto2 = "";
+    private string newProductPhoto3 = "";
+    private bool isLoadingDetails;
+    private bool showLinkProductModal;
+    private MeliItemDto? linkProductItem;
+    private List<ProductDto>? allProducts;
+    private string linkSearchTerm = "";
 
     private void TogglePromoFilter()
     {
@@ -1795,6 +1976,7 @@
                     (i.FamilyId ?? "").Contains(search, StringComparison.OrdinalIgnoreCase) ||
                     (i.UserProductId ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)),
                 "sku" => filtered.Where(i => (i.Sku ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)),
+                "producto" => filtered.Where(i => (i.ProductTitle ?? "").Contains(search, StringComparison.OrdinalIgnoreCase)),
                 _ => filtered
             };
         }
@@ -2396,5 +2578,166 @@
         public string UserProductId { get; set; } = "";
         public string Title { get; set; } = "";
         public List<MeliItemDto> Items { get; set; } = new();
+    }
+
+    // --- Product Linking ---
+    private async Task OpenCreateProductFromItem(MeliItemDto item)
+    {
+        createProductItem = item;
+        newProductTitle = item.Title;
+        newProductDescription = "";
+        newProductBrand = "";
+        newProductModel = "";
+        newProductSku = item.Sku ?? "";
+        newProductCostPrice = 0;
+        newProductRetailPrice = item.Price;
+        newProductStock = item.AvailableQuantity;
+        newProductPhoto1 = "";
+        newProductPhoto2 = "";
+        newProductPhoto3 = "";
+        showCreateProductModal = true;
+        isLoadingDetails = true;
+        StateHasChanged();
+
+        try
+        {
+            var details = await Api.GetMeliItemDetailsAsync(item.MeliItemId);
+            if (details is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(details.Description))
+                    newProductDescription = details.Description;
+                if (details.Pictures.Count > 0) newProductPhoto1 = details.Pictures[0];
+                if (details.Pictures.Count > 1) newProductPhoto2 = details.Pictures[1];
+                if (details.Pictures.Count > 2) newProductPhoto3 = details.Pictures[2];
+            }
+        }
+        catch { /* details fetch failed, continue with basic data */ }
+        finally
+        {
+            isLoadingDetails = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CloseCreateProductModal()
+    {
+        showCreateProductModal = false;
+        createProductItem = null;
+    }
+
+    private async Task CreateProductFromItem()
+    {
+        if (createProductItem is null || string.IsNullOrWhiteSpace(newProductTitle)) return;
+        isCreatingProduct = true;
+
+        try
+        {
+            var request = new CreateProductRequest
+            {
+                Title = newProductTitle,
+                Description = string.IsNullOrWhiteSpace(newProductDescription) ? null : newProductDescription,
+                Brand = string.IsNullOrWhiteSpace(newProductBrand) ? null : newProductBrand,
+                Model = string.IsNullOrWhiteSpace(newProductModel) ? null : newProductModel,
+                Sku = string.IsNullOrWhiteSpace(newProductSku) ? null : newProductSku,
+                Photo1 = string.IsNullOrWhiteSpace(newProductPhoto1) ? null : newProductPhoto1,
+                Photo2 = string.IsNullOrWhiteSpace(newProductPhoto2) ? null : newProductPhoto2,
+                Photo3 = string.IsNullOrWhiteSpace(newProductPhoto3) ? null : newProductPhoto3,
+                CostPrice = newProductCostPrice,
+                RetailPrice = newProductRetailPrice,
+                Stock = newProductStock
+            };
+
+            var product = await Api.CreateProductAsync(request);
+            if (product is not null)
+            {
+                var updated = await Api.LinkItemToProductAsync(createProductItem.MeliItemId, product.Id);
+                if (updated is not null && items is not null)
+                {
+                    var idx = items.FindIndex(i => i.Id == createProductItem.Id);
+                    if (idx >= 0) items[idx] = updated;
+                    InvalidateFilterCache();
+                }
+                ToastService.Success("Producto creado y vinculado");
+            }
+            showCreateProductModal = false;
+            createProductItem = null;
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error: " + ex.Message);
+        }
+        finally
+        {
+            isCreatingProduct = false;
+        }
+    }
+
+    private async Task OpenLinkProductDropdown(MeliItemDto item)
+    {
+        linkProductItem = item;
+        linkSearchTerm = "";
+        allProducts ??= await Api.GetProductsAsync();
+        showLinkProductModal = true;
+    }
+
+    private void CloseLinkProductModal()
+    {
+        showLinkProductModal = false;
+        linkProductItem = null;
+    }
+
+    private void OnLinkSearchInput(ChangeEventArgs e)
+    {
+        linkSearchTerm = e.Value?.ToString() ?? "";
+    }
+
+    private List<ProductDto> GetFilteredProducts()
+    {
+        if (allProducts is null) return new();
+        if (string.IsNullOrWhiteSpace(linkSearchTerm)) return allProducts;
+        return allProducts.Where(p => p.Title.Contains(linkSearchTerm, StringComparison.OrdinalIgnoreCase)
+            || (p.Brand ?? "").Contains(linkSearchTerm, StringComparison.OrdinalIgnoreCase)
+            || (p.Model ?? "").Contains(linkSearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    private async Task LinkToProduct(int productId)
+    {
+        if (linkProductItem is null) return;
+        try
+        {
+            var updated = await Api.LinkItemToProductAsync(linkProductItem.MeliItemId, productId);
+            if (updated is not null && items is not null)
+            {
+                var idx = items.FindIndex(i => i.Id == linkProductItem.Id);
+                if (idx >= 0) items[idx] = updated;
+                InvalidateFilterCache();
+            }
+            ToastService.Success("Publicacion vinculada al producto");
+            showLinkProductModal = false;
+            linkProductItem = null;
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error: " + ex.Message);
+        }
+    }
+
+    private async Task UnlinkProduct(MeliItemDto item)
+    {
+        try
+        {
+            var updated = await Api.UnlinkItemProductAsync(item.MeliItemId);
+            if (updated is not null && items is not null)
+            {
+                var idx = items.FindIndex(i => i.Id == item.Id);
+                if (idx >= 0) items[idx] = updated;
+                InvalidateFilterCache();
+            }
+            ToastService.Info("Publicacion desvinculada del producto");
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error: " + ex.Message);
+        }
     }
 }

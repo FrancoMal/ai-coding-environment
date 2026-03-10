@@ -123,7 +123,9 @@ public record MeliItemDto(
     string? FamilyId,
     string? FamilyName,
     DateTime? DateCreated,
-    DateTime? LastUpdated
+    DateTime? LastUpdated,
+    int? ProductId,
+    string? ProductTitle
 );
 
 public record MeliItemsResponse(List<MeliItemDto> Items, int Total);
@@ -131,6 +133,8 @@ public record MeliItemsResponse(List<MeliItemDto> Items, int Total);
 public record MeliItemSyncResult(int TotalSynced, int TotalErrors, List<string> Errors);
 
 public record UpdateMeliItemRequest(string? Title, decimal? Price, int? AvailableQuantity, string? Status);
+
+public record LinkItemToProductRequest(int ProductId);
 
 // --- Item Promotion DTOs ---
 
@@ -165,3 +169,8 @@ public class ListingCostDto
     public decimal TaxesEstimated { get; set; }
     public decimal NetAmount { get; set; }
 }
+
+public record MeliItemDetailsDto(
+    List<string> Pictures,
+    string? Description
+);
