@@ -38,12 +38,41 @@ git commit -m "Agregar formulario de contacto en el dashboard"
 
 No acumules muchos cambios en un solo commit. Un commit por funcionalidad o arreglo. Esto permite deshacer cosas si algo sale mal.
 
+### 1.1 Autor de commits: solo propietario del repo
+
+- El autor de commits debe ser el propietario del repositorio.
+- No incluir en commits texto tipo: "hecho por Claude", "hecho por agente", "AI generated", ni trailers `Co-authored-by` de agentes.
+- Antes de commitear, verificar identidad git:
+
+```bash
+git config user.name
+git config user.email
+```
+
+Si no coincide con el propietario, corregir:
+
+```bash
+git config user.name "<OWNER_NAME>"
+git config user.email "<OWNER_EMAIL>"
+```
+
 ### 2. Probar antes de decir que esta listo
 
 No digas "listo, funciona" sin haber verificado. Siempre:
 - Si tocaste el backend: verifica que compila (`dotnet build`)
 - Si tocaste el frontend: recarga el browser y verifica visualmente
 - Si tocaste Docker: hace `docker compose up --build -d` y verifica que los containers esten corriendo
+
+### 2.1 Validacion obligatoria de lo que ve el navegador
+
+Siempre hacer estos dos pasos antes de confirmar que un cambio web quedo aplicado:
+
+1. **Rebuild real del servicio web** (no confiar en archivos locales viejos)
+   - `docker compose up --build -d web`
+2. **Chequeo adentro del contenedor** (confirmar lo que realmente sirve Nginx)
+   - ejemplo: `docker compose exec web sh -lc "ls -la /usr/share/nginx/html && grep -n \"texto-clave\" /usr/share/nginx/html/index.html || true"`
+
+Si el archivo local dice una cosa pero el contenedor sirve otra, prevalece lo del contenedor.
 
 ### 3. No romper lo que ya funciona
 
@@ -57,6 +86,40 @@ Despues de cada tarea, explica brevemente al usuario:
 - Como lo puede ver o probar
 
 Ejemplo: "Agregue una seccion de contacto en la pagina principal. Ahora cuando entres al dashboard vas a ver un formulario donde podes escribir un mensaje. Los mensajes se guardan en la base de datos."
+
+### 4.1 Flujo de ramas recomendado (produccion vs desarrollo)
+
+Usar este modelo simple:
+
+- `main`: produccion estable (solo merges probados)
+- `develop`: integracion de cambios en desarrollo
+- `feature/<nombre-corto>`: una funcionalidad especifica
+- `hotfix/<nombre-corto>`: arreglo urgente de produccion
+
+Flujo sugerido:
+
+1. Crear rama de feature desde `develop`
+2. Implementar cambios + commits chicos
+3. Abrir PR hacia `develop`
+4. Cuando `develop` este estable, merge a `main`
+
+Ejemplo:
+
+```bash
+git checkout develop
+git pull
+git checkout -b feature/integracion-mercadolibre
+# cambios...
+git add -A
+git commit -m "Agregar endpoint base de publicaciones"
+git push -u origin feature/integracion-mercadolibre
+```
+
+Con GitHub CLI:
+
+```bash
+gh pr create --base develop --head feature/integracion-mercadolibre --title "Integracion MercadoLibre base" --body "Cambios iniciales"
+```
 
 ### 5. Usar subagentes para tareas grandes
 

@@ -162,10 +162,51 @@ if ! docker info &>/dev/null; then
     fi
 fi
 
+# Verificar Docker Compose plugin
+if docker compose version &>/dev/null; then
+    skip "Docker Compose $(docker compose version --short 2>/dev/null || echo 'plugin')"
+else
+    if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
+        install_apt docker-compose-plugin
+        if docker compose version &>/dev/null; then
+            ok "Docker Compose instalado"
+        else
+            fail "No se pudo instalar Docker Compose"
+            exit 1
+        fi
+    elif [ "$OS" = "macos" ]; then
+        fail "Docker Compose no disponible. Verifica Docker Desktop actualizado."
+        exit 1
+    fi
+fi
+
 # ===========================================================
-# 5. Herramientas AI
+# 5. GitHub CLI (gh)
 # ===========================================================
-info "5/6 - Herramientas AI"
+info "5/7 - GitHub CLI"
+
+if command -v gh &>/dev/null; then
+    skip "gh $(gh --version | head -1 | awk '{print $3}')"
+else
+    if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
+        (type -p wget >/dev/null || sudo apt-get install -y wget) >/dev/null 2>&1
+        sudo mkdir -p -m 755 /etc/apt/keyrings
+        wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
+        sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq gh >/dev/null 2>&1
+        ok "GitHub CLI instalado"
+    elif [ "$OS" = "macos" ]; then
+        brew install gh
+        ok "GitHub CLI instalado"
+    fi
+fi
+
+# ===========================================================
+# 6. Herramientas AI
+# ===========================================================
+info "6/7 - Herramientas AI"
 
 install_npm_tool() {
     local name="$1"
@@ -190,9 +231,9 @@ install_npm_tool "Codex CLI"    "@openai/codex"              "codex"
 install_npm_tool "Gemini CLI"   "@google/gemini-cli"         "gemini"
 
 # ===========================================================
-# 6. Levantar el proyecto
+# 7. Levantar el proyecto
 # ===========================================================
-info "6/6 - Proyecto"
+info "7/7 - Proyecto"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -225,7 +266,8 @@ echo ""
 echo "  Dashboard:   http://localhost:3000"
 echo "  Login:       admin / admin123"
 echo ""
-echo "  Herramientas AI disponibles:"
+echo "  Herramientas disponibles:"
+command -v gh       &>/dev/null && echo "    - gh        (GitHub CLI)"
 command -v claude   &>/dev/null && echo "    - claude    (Claude Code)"
 command -v opencode &>/dev/null && echo "    - opencode  (OpenCode)"
 command -v codex    &>/dev/null && echo "    - codex     (Codex CLI)"

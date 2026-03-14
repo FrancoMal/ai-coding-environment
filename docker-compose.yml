@@ -43,6 +43,9 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:80
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AIcoding;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    volumes:
+      - /proc:/host_proc:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - aicoding-net
     depends_on:
