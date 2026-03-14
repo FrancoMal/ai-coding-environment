@@ -2,6 +2,8 @@
 @inject AuthService AuthService
 @inject NavigationManager Navigation
 @inject ToastService ToastService
+@inject SyncProgressTracker SyncProgress
+@implements IDisposable
 
 <aside class="sidebar @(sidebarOpen ? "open" : "") @(sidebarCollapsed ? "collapsed" : "")" id="sidebar">
     <div class="sidebar-brand">
@@ -12,32 +14,75 @@
         </button>
     </div>
     <nav class="sidebar-nav" role="navigation" aria-label="Menu principal">
-        <NavItem Href="/" Label="Dashboard" Icon="@SvgIcons.Dashboard"
-                 IsActive="@IsActive("/")" OnClick="@(() => NavigateTo("/"))" />
-        @if (isAdmin)
+        @if (HasPerm("dashboard"))
         {
-            <NavItem Href="/usuarios" Label="Usuarios" Icon="@SvgIcons.Users"
-                     IsActive="@IsActive("/usuarios")" OnClick="@(() => NavigateTo("/usuarios"))" />
-            <NavItem Href="/roles" Label="Roles" Icon="@SvgIcons.Shield"
-                     IsActive="@IsActive("/roles")" OnClick="@(() => NavigateTo("/roles"))" />
+            <NavItem Href="/" Label="Dashboard" Icon="@SvgIcons.Dashboard"
+                     IsActive="@IsActive("/")" OnClick="@(() => NavigateTo("/"))" />
         }
-        <NavItem Href="/integraciones" Label="Integraciones" Icon="@SvgIcons.Link"
-                 IsActive="@IsActive("/integraciones")" OnClick="@(() => NavigateTo("/integraciones"))" />
-        <NavItem Href="/ordenes" Label="Ordenes" Icon="@SvgIcons.ShoppingBag"
-                 IsActive="@IsActive("/ordenes")" OnClick="@(() => NavigateTo("/ordenes"))" />
-        <NavItem Href="/publicaciones" Label="Publicaciones" Icon="@SvgIcons.Tag"
-                 IsActive="@IsActive("/publicaciones")" OnClick="@(() => NavigateTo("/publicaciones"))" />
-        <NavItem Href="/productos" Label="Productos" Icon="@SvgIcons.Package"
-                 IsActive="@IsActive("/productos")" OnClick="@(() => NavigateTo("/productos"))" />
-        @if (isAdmin)
+
+        @if (HasPerm("publicaciones") || HasPerm("ordenes"))
         {
-            <NavItem Href="/procesos" Label="Procesos" Icon="@SvgIcons.Timer"
-                     IsActive="@IsActive("/procesos")" OnClick="@(() => NavigateTo("/procesos"))" />
-            <NavItem Href="/auditoria" Label="Auditoria" Icon="@SvgIcons.History"
-                     IsActive="@IsActive("/auditoria")" OnClick="@(() => NavigateTo("/auditoria"))" />
+            <NavGroup Label="MercadoLibre" Icon="@SvgIcons.Store"
+                      HasActiveChild="@(IsActive("/publicaciones") || IsActive("/ordenes"))">
+                @if (HasPerm("publicaciones"))
+                {
+                    <NavItem Href="/publicaciones" Label="Publicaciones" Icon="@SvgIcons.Tag"
+                             IsActive="@IsActive("/publicaciones")" OnClick="@(() => NavigateTo("/publicaciones"))" />
+                }
+                @if (HasPerm("ordenes"))
+                {
+                    <NavItem Href="/ordenes" Label="Ordenes" Icon="@SvgIcons.ShoppingBag"
+                             IsActive="@IsActive("/ordenes")" OnClick="@(() => NavigateTo("/ordenes"))" />
+                }
+            </NavGroup>
         }
-        <NavItem Href="/config" Label="Configuracion" Icon="@SvgIcons.Settings"
-                 IsActive="@IsActive("/config")" OnClick="@(() => NavigateTo("/config"))" />
+
+        @if (HasPerm("productos"))
+        {
+            <NavGroup Label="Inventario" Icon="@SvgIcons.Inventory"
+                      HasActiveChild="@IsActive("/productos")">
+                <NavItem Href="/productos" Label="Productos" Icon="@SvgIcons.Package"
+                         IsActive="@IsActive("/productos")" OnClick="@(() => NavigateTo("/productos"))" />
+            </NavGroup>
+        }
+
+        @if (HasPerm("usuarios") || HasPerm("roles") || HasPerm("integraciones") || HasPerm("procesos") || HasPerm("auditoria"))
+        {
+            <NavGroup Label="Administracion" Icon="@SvgIcons.Admin"
+                      HasActiveChild="@(IsActive("/usuarios") || IsActive("/roles") || IsActive("/integraciones") || IsActive("/procesos") || IsActive("/auditoria"))">
+                @if (HasPerm("usuarios"))
+                {
+                    <NavItem Href="/usuarios" Label="Usuarios" Icon="@SvgIcons.Users"
+                             IsActive="@IsActive("/usuarios")" OnClick="@(() => NavigateTo("/usuarios"))" />
+                }
+                @if (HasPerm("roles"))
+                {
+                    <NavItem Href="/roles" Label="Roles" Icon="@SvgIcons.Shield"
+                             IsActive="@IsActive("/roles")" OnClick="@(() => NavigateTo("/roles"))" />
+                }
+                @if (HasPerm("integraciones"))
+                {
+                    <NavItem Href="/integraciones" Label="Integraciones" Icon="@SvgIcons.Link"
+                             IsActive="@IsActive("/integraciones")" OnClick="@(() => NavigateTo("/integraciones"))" />
+                }
+                @if (HasPerm("procesos"))
+                {
+                    <NavItem Href="/procesos" Label="Procesos" Icon="@SvgIcons.Timer"
+                             IsActive="@IsActive("/procesos")" OnClick="@(() => NavigateTo("/procesos"))" />
+                }
+                @if (HasPerm("auditoria"))
+                {
+                    <NavItem Href="/auditoria" Label="Auditoria" Icon="@SvgIcons.History"
+                             IsActive="@IsActive("/auditoria")" OnClick="@(() => NavigateTo("/auditoria"))" />
+                }
+            </NavGroup>
+        }
+
+        @if (HasPerm("config"))
+        {
+            <NavItem Href="/config" Label="Configuracion" Icon="@SvgIcons.Settings"
+                     IsActive="@IsActive("/config")" OnClick="@(() => NavigateTo("/config"))" />
+        }
     </nav>
     <div class="sidebar-user">
         <div class="sidebar-user-avatar">@SvgIcons.User</div>
@@ -73,6 +118,29 @@
             <h1 class="topbar-title">Tu Marca</h1>
         </div>
         <div class="topbar-actions">
+            @if (SyncProgress.State.IsActive && !SyncProgress.State.ShowModal)
+            {
+                <div class="topbar-sync-indicator @(SyncProgress.State.Status)" @onclick="OpenSyncModal" title="@SyncProgress.State.Description">
+                    @if (SyncProgress.State.Status == "running")
+                    {
+                        <span class="topbar-sync-spinner"></span>
+                        <span class="topbar-sync-text">@SyncProgress.State.Percentage%</span>
+                        <div class="topbar-sync-bar">
+                            <div class="topbar-sync-bar-fill" style="width: @(SyncProgress.State.Percentage)%"></div>
+                        </div>
+                    }
+                    else if (SyncProgress.State.Status == "completed")
+                    {
+                        <span class="topbar-sync-text">✅ Sincronizado</span>
+                        <button class="topbar-sync-dismiss" @onclick="DismissSync" @onclick:stopPropagation="true" title="Cerrar">✕</button>
+                    }
+                    else if (SyncProgress.State.Status == "error")
+                    {
+                        <span class="topbar-sync-text">❌ Error</span>
+                        <button class="topbar-sync-dismiss" @onclick="DismissSync" @onclick:stopPropagation="true" title="Cerrar">✕</button>
+                    }
+                </div>
+            }
             <button class="topbar-btn" @onclick="Refresh" title="Actualizar">
                 @SvgIcons.Refresh
             </button>
@@ -96,17 +164,90 @@
     private bool userMenuOpen;
     private string username = "usuario";
     private string role = "user";
-    private bool isAdmin;
+    private List<string> permissions = new();
+
+    private static readonly Dictionary<string, string> RouteToMenuKey = new()
+    {
+        { "", "dashboard" },
+        { "publicaciones", "publicaciones" },
+        { "ordenes", "ordenes" },
+        { "productos", "productos" },
+        { "usuarios", "usuarios" },
+        { "roles", "roles" },
+        { "integraciones", "integraciones" },
+        { "procesos", "procesos" },
+        { "auditoria", "auditoria" },
+        { "config", "config" },
+        { "perfil", "" } // perfil always allowed
+    };
 
     protected override async Task OnInitializedAsync()
     {
+        SyncProgress.OnChange += OnSyncProgressChanged;
         var user = await AuthService.GetUserAsync();
         if (user is not null)
         {
             username = user.Username;
             role = user.Role;
-            isAdmin = user.Role.Equals("admin", StringComparison.OrdinalIgnoreCase);
+            permissions = user.Permissions ?? new();
         }
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Navigation.LocationChanged += OnLocationChanged;
+            CheckRoutePermission();
+        }
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        CheckRoutePermission();
+    }
+
+    private void CheckRoutePermission()
+    {
+        if (permissions.Count == 0) return; // permissions not loaded yet
+
+        var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri).TrimStart('/').Split('?')[0].Split('#')[0];
+
+        if (RouteToMenuKey.TryGetValue(relativePath, out var menuKey))
+        {
+            // Empty menuKey means always allowed (like /perfil)
+            if (!string.IsNullOrEmpty(menuKey) && !permissions.Contains(menuKey))
+            {
+                Navigation.NavigateTo("/");
+            }
+        }
+    }
+
+    private bool HasPerm(string key) => permissions.Contains(key);
+
+    private void OnSyncProgressChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OpenSyncModal()
+    {
+        if (SyncProgress.State.Status == "running")
+        {
+            SyncProgress.State.ShowModal = true;
+            Navigation.NavigateTo("/publicaciones");
+        }
+    }
+
+    private void DismissSync()
+    {
+        SyncProgress.Dismiss();
+    }
+
+    public void Dispose()
+    {
+        SyncProgress.OnChange -= OnSyncProgressChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
     }
 
     private bool IsActive(string href)

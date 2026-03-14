@@ -36,6 +36,7 @@ public class Product
     public decimal RetailPrice { get; set; }
 
     public int Stock { get; set; }
+    public int CriticalStock { get; set; }
 
     public bool IsActive { get; set; } = true;
 

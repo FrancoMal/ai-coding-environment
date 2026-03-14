@@ -132,6 +132,72 @@ public class IntegrationsController : ControllerBase
         }
     }
 
+    [HttpPost("email-smtp/test")]
+    public async Task<IActionResult> TestEmailSmtp()
+    {
+        var integration = await _service.GetByProviderAsync("email-smtp");
+        if (integration is null)
+            return BadRequest(new { error = "No hay configuracion de email" });
+
+        var secret = await _service.GetSecretAsync("email-smtp");
+        if (string.IsNullOrEmpty(secret))
+            return BadRequest(new { error = "No hay contraseña configurada" });
+
+        string smtpHost = "smtp.gmail.com";
+        int smtpPort = 587;
+        bool smtpTls = true;
+        string fromAddress = "";
+        string fromName = "";
+        string username = "";
+
+        if (!string.IsNullOrEmpty(integration.Settings))
+        {
+            try
+            {
+                var doc = System.Text.Json.JsonDocument.Parse(integration.Settings);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("smtpHost", out var h)) smtpHost = h.GetString() ?? "smtp.gmail.com";
+                if (root.TryGetProperty("smtpPort", out var p)) smtpPort = p.GetInt32();
+                if (root.TryGetProperty("smtpTls", out var t)) smtpTls = t.GetBoolean();
+                if (root.TryGetProperty("fromAddress", out var f)) fromAddress = f.GetString() ?? "";
+                if (root.TryGetProperty("fromName", out var n)) fromName = n.GetString() ?? "";
+                if (root.TryGetProperty("username", out var u)) username = u.GetString() ?? "";
+            }
+            catch { }
+        }
+
+        if (string.IsNullOrEmpty(fromAddress))
+            return BadRequest(new { error = "No hay email de remitente configurado" });
+
+        try
+        {
+            using var client = new System.Net.Mail.SmtpClient(smtpHost, smtpPort)
+            {
+                Credentials = new System.Net.NetworkCredential(
+                    string.IsNullOrEmpty(username) ? fromAddress : username,
+                    secret),
+                EnableSsl = smtpTls,
+                Timeout = 15000
+            };
+
+            var message = new System.Net.Mail.MailMessage
+            {
+                From = new System.Net.Mail.MailAddress(fromAddress, string.IsNullOrEmpty(fromName) ? fromAddress : fromName),
+                Subject = "Email de prueba - Tu Marca",
+                Body = "Este es un email de prueba enviado desde Tu Marca.\n\nSi recibiste este mensaje, la configuracion SMTP esta funcionando correctamente.",
+                IsBodyHtml = false
+            };
+            message.To.Add(fromAddress);
+
+            await client.SendMailAsync(message);
+            return Ok(new { message = "Email de prueba enviado correctamente a " + fromAddress });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = "Error al enviar email: " + ex.Message });
+        }
+    }
+
     [HttpDelete("{provider}")]
     public async Task<IActionResult> Delete(string provider)
     {

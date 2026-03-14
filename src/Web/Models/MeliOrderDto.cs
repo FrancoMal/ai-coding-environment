@@ -17,8 +17,12 @@ public class MeliOrderDto
     public string ItemTitle { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
+    public decimal? FullUnitPrice { get; set; }
     public long? ShippingId { get; set; }
     public long? PackId { get; set; }
+    public string? ItemThumbnailUrl { get; set; }
+    public string? ShippingStatus { get; set; }
+    public string? ShippingSubstatus { get; set; }
 }
 
 public class MeliOrdersResponse

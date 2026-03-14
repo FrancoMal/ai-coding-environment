@@ -34,14 +34,24 @@ public class MeliOrderService
         var total = await query.CountAsync();
         var orders = await query
             .OrderByDescending(o => o.DateCreated)
-            .Select(o => new MeliOrderDto(
-                o.Id, o.MeliOrderId, o.MeliAccountId,
-                o.MeliAccount != null ? o.MeliAccount.Nickname : "Desconocida",
-                o.Status, o.DateCreated, o.DateClosed,
-                o.TotalAmount, o.CurrencyId,
-                o.BuyerId, o.BuyerNickname,
-                o.ItemId, o.ItemTitle, o.Quantity, o.UnitPrice,
-                o.ShippingId, o.PackId))
+            .GroupJoin(
+                _db.MeliItems,
+                o => o.ItemId,
+                i => i.MeliItemId,
+                (o, items) => new { Order = o, Items = items })
+            .SelectMany(
+                x => x.Items.DefaultIfEmpty(),
+                (x, item) => new MeliOrderDto(
+                    x.Order.Id, x.Order.MeliOrderId, x.Order.MeliAccountId,
+                    x.Order.MeliAccount != null ? x.Order.MeliAccount.Nickname : "Desconocida",
+                    x.Order.Status, x.Order.DateCreated, x.Order.DateClosed,
+                    x.Order.TotalAmount, x.Order.CurrencyId,
+                    x.Order.BuyerId, x.Order.BuyerNickname,
+                    x.Order.ItemId, x.Order.ItemTitle, x.Order.Quantity, x.Order.UnitPrice, x.Order.FullUnitPrice,
+                    x.Order.ShippingId, x.Order.PackId,
+                    item != null ? item.Thumbnail : null,
+                    x.Order.ShippingStatus,
+                    x.Order.ShippingSubstatus))
             .ToListAsync();
 
         return new MeliOrdersResponse(orders, total);
@@ -145,7 +155,7 @@ public class MeliOrderService
                 long? packId = order.TryGetProperty("pack_id", out var pid)
                     && pid.ValueKind != JsonValueKind.Null
                     ? pid.GetInt64() : null;
-                synced += await UpsertOrderAsync(account.Id, order, packId);
+                synced += await UpsertOrderAsync(account.Id, order, packId, http);
             }
 
             await _db.SaveChangesAsync();
@@ -364,7 +374,7 @@ public class MeliOrderService
         return detail;
     }
 
-    private async Task<int> UpsertOrderAsync(int accountId, JsonElement order, long? packId)
+    private async Task<int> UpsertOrderAsync(int accountId, JsonElement order, long? packId, HttpClient http)
     {
         var meliOrderId = order.GetProperty("id").GetInt64();
         var status = order.GetProperty("status").GetString() ?? "unknown";
@@ -382,6 +392,27 @@ public class MeliOrderService
             && shId.ValueKind != JsonValueKind.Null
             ? shId.GetInt64() : (long?)null;
 
+        // Fetch shipping status + substatus from shipments API
+        string? shippingStatus = null;
+        string? shippingSubstatus = null;
+        if (shippingId.HasValue)
+        {
+            try
+            {
+                var shipResp = await http.GetAsync($"https://api.mercadolibre.com/shipments/{shippingId.Value}");
+                if (shipResp.IsSuccessStatusCode)
+                {
+                    var shipJson = await shipResp.Content.ReadAsStringAsync();
+                    var shipDoc = JsonDocument.Parse(shipJson).RootElement;
+                    if (shipDoc.TryGetProperty("status", out var shipSt) && shipSt.ValueKind != JsonValueKind.Null)
+                        shippingStatus = shipSt.GetString();
+                    if (shipDoc.TryGetProperty("substatus", out var shipSub) && shipSub.ValueKind != JsonValueKind.Null)
+                        shippingSubstatus = shipSub.GetString();
+                }
+            }
+            catch { /* ignore shipping fetch errors */ }
+        }
+
         var items = order.GetProperty("order_items");
         int count = 0;
 
@@ -391,6 +422,9 @@ public class MeliOrderService
             var itemTitle = item.GetProperty("item").GetProperty("title").GetString() ?? "Sin titulo";
             var quantity = item.GetProperty("quantity").GetInt32();
             var unitPrice = item.GetProperty("unit_price").GetDecimal();
+            decimal? fullUnitPrice = item.TryGetProperty("full_unit_price", out var fup)
+                && fup.ValueKind != JsonValueKind.Null
+                ? fup.GetDecimal() : null;
 
             var existing = await _db.MeliOrders.FirstOrDefaultAsync(
                 o => o.MeliOrderId == meliOrderId && o.ItemId == itemId);
@@ -403,8 +437,11 @@ public class MeliOrderService
                 existing.BuyerNickname = buyerNickname;
                 existing.Quantity = quantity;
                 existing.UnitPrice = unitPrice;
+                existing.FullUnitPrice = fullUnitPrice;
                 existing.ShippingId = shippingId;
                 existing.PackId = packId;
+                existing.ShippingStatus = shippingStatus;
+                existing.ShippingSubstatus = shippingSubstatus;
                 existing.UpdatedAt = DateTime.UtcNow;
             }
             else
@@ -424,8 +461,11 @@ public class MeliOrderService
                     ItemTitle = itemTitle,
                     Quantity = quantity,
                     UnitPrice = unitPrice,
+                    FullUnitPrice = fullUnitPrice,
                     ShippingId = shippingId,
-                    PackId = packId
+                    PackId = packId,
+                    ShippingStatus = shippingStatus,
+                    ShippingSubstatus = shippingSubstatus
                 });
             }
             count++;

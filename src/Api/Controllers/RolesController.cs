@@ -63,6 +63,17 @@ public class RolesController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("menu-tree")]
+    public IActionResult GetMenuTree()
+    {
+        var tree = MenuDefinition.MenuTree.Select(g => new MenuTreeDto(
+            g.GroupKey,
+            g.Label,
+            g.Items.Select(i => new MenuItemDto(i.Key, i.Label, i.Route)).ToList()
+        )).ToList();
+        return Ok(tree);
+    }
+
     private bool IsAdmin()
     {
         return User.FindFirst(ClaimTypes.Role)?.Value == "admin";

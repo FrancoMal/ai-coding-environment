@@ -62,3 +62,35 @@ public class PublishItemResponse
     public string? Permalink { get; set; }
     public string? Error { get; set; }
 }
+
+public class BulkPublishRequest
+{
+    public List<int> ProductIds { get; set; } = new();
+    public int MeliAccountId { get; set; }
+    public string ListingTypeId { get; set; } = "gold_special";
+    public string PriceMode { get; set; } = "markup";
+    public decimal MarkupPercent { get; set; }
+    public string Condition { get; set; } = "new";
+    public bool FreeShipping { get; set; }
+}
+
+public class BulkPublishResponse
+{
+    public int Total { get; set; }
+    public int Successful { get; set; }
+    public int Failed { get; set; }
+    public int Skipped { get; set; }
+    public List<BulkPublishItemResult> Results { get; set; } = new();
+}
+
+public class BulkPublishItemResult
+{
+    public int ProductId { get; set; }
+    public string ProductTitle { get; set; } = "";
+    public bool Success { get; set; }
+    public bool Skipped { get; set; }
+    public string? SkipReason { get; set; }
+    public string? MeliItemId { get; set; }
+    public string? Permalink { get; set; }
+    public string? Error { get; set; }
+}

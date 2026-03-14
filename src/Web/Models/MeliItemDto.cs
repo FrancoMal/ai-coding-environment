@@ -29,6 +29,7 @@ public class MeliItemDto
     public DateTime? LastUpdated { get; set; }
     public int? ProductId { get; set; }
     public string? ProductTitle { get; set; }
+    public int? ProductCriticalStock { get; set; }
 }
 
 public class MeliItemsResponse
@@ -42,6 +43,7 @@ public class MeliItemSyncResult
     public int TotalSynced { get; set; }
     public int TotalErrors { get; set; }
     public List<string> Errors { get; set; } = new();
+    public string? ProgressId { get; set; }
 }
 
 public class UpdateMeliItemRequest

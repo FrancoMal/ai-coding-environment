@@ -14,13 +14,17 @@ public class MeliController : ControllerBase
     private readonly MeliOrderService _orderService;
     private readonly MeliItemService _itemService;
     private readonly AiService _aiService;
+    private readonly SyncProgressService _syncProgress;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public MeliController(MeliAccountService service, MeliOrderService orderService, MeliItemService itemService, AiService aiService)
+    public MeliController(MeliAccountService service, MeliOrderService orderService, MeliItemService itemService, AiService aiService, SyncProgressService syncProgress, IServiceScopeFactory scopeFactory)
     {
         _service = service;
         _orderService = orderService;
         _itemService = itemService;
         _aiService = aiService;
+        _syncProgress = syncProgress;
+        _scopeFactory = scopeFactory;
     }
 
     [HttpGet("accounts")]
@@ -157,17 +161,63 @@ public class MeliController : ControllerBase
     }
 
     [HttpPost("items/sync")]
-    public async Task<IActionResult> SyncItems([FromQuery] string? status = null, [FromQuery] int? accountId = null)
+    public IActionResult SyncItems([FromQuery] string? status = null, [FromQuery] int? accountId = null)
     {
         try
         {
-            var result = await _itemService.SyncItemsAsync(status, accountId);
-            return Ok(result);
+            // Start progress tracking
+            var progressId = _syncProgress.StartSync(
+                status is not null ? $"Sincronizando {status}" :
+                accountId.HasValue ? $"Sincronizando cuenta {accountId}" :
+                "Sincronizando todas las publicaciones");
+
+            // Fire and forget - run sync in background, frontend polls progress
+            var scopeFactory = _scopeFactory;
+            var syncProgress = _syncProgress;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = scopeFactory.CreateScope();
+                    var itemService = scope.ServiceProvider.GetRequiredService<MeliItemService>();
+                    await itemService.SyncItemsAsync(status, accountId, progressId);
+                }
+                catch (Exception ex)
+                {
+                    syncProgress.Fail(progressId, $"Error: {ex.Message}");
+                }
+            });
+
+            // Return immediately with progressId
+            return Ok(new { TotalSynced = 0, TotalErrors = 0, Errors = new List<string>(), ProgressId = progressId });
         }
         catch (Exception ex)
         {
             return BadRequest(new { error = ex.Message });
         }
+    }
+
+    [HttpGet("items/sync/progress")]
+    public IActionResult GetSyncProgress([FromQuery] string? id = null)
+    {
+        var info = id is not null ? _syncProgress.Get(id) : _syncProgress.GetLatest();
+        if (info is null) return Ok(new { status = "idle" });
+        return Ok(new
+        {
+            info.Id,
+            info.Status,
+            info.Description,
+            info.CurrentStep,
+            info.CurrentAccount,
+            info.AccountIndex,
+            info.TotalAccounts,
+            info.TotalItemsFound,
+            info.ItemsSynced,
+            info.TotalErrors,
+            info.Percentage,
+            info.StartedAt,
+            info.FinishedAt
+        });
     }
 
     [HttpGet("items/{meliItemId}/promotions")]
@@ -341,6 +391,20 @@ public class MeliController : ControllerBase
             var result = await _itemService.PublishItemAsync(request);
             if (!result.Success)
                 return BadRequest(new { error = result.Error });
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("publish/bulk")]
+    public async Task<IActionResult> BulkPublish([FromBody] BulkPublishRequest request)
+    {
+        try
+        {
+            var result = await _itemService.BulkPublishAsync(request);
             return Ok(result);
         }
         catch (Exception ex)

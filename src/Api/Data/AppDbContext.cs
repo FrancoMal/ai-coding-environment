@@ -17,6 +17,7 @@ public class AppDbContext : DbContext
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ScheduledProcess> ScheduledProcesses => Set<ScheduledProcess>();
     public DbSet<ProcessExecutionLog> ProcessExecutionLogs => Set<ProcessExecutionLog>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -35,6 +36,15 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Role>(entity =>
         {
             entity.HasIndex(r => r.Name).IsUnique();
+        });
+
+        modelBuilder.Entity<RolePermission>(entity =>
+        {
+            entity.HasIndex(rp => new { rp.RoleId, rp.MenuKey }).IsUnique();
+            entity.HasOne(rp => rp.Role)
+                  .WithMany(r => r.Permissions)
+                  .HasForeignKey(rp => rp.RoleId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Integration>(entity =>

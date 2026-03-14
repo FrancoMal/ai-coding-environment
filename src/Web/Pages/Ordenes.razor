@@ -143,6 +143,10 @@
                                     </span>
                                 </div>
                             </th>
+                            <!-- Foto: no sort/filter -->
+                            <th style="width: 50px; text-align: center;">
+                                <div class="th-inner"><span class="th-label">Foto</span></div>
+                            </th>
                             <!-- Producto: text input -->
                             <th class="th-filterable">
                                 <div class="th-filter-inner">
@@ -219,6 +223,41 @@
                                     </div>
                                 }
                             </th>
+                            <!-- Envio: label + sort + checkbox dropdown -->
+                            <th class="th-dropdown @(activeFilterColumn == "envio" ? "filter-open" : "")">
+                                <div class="th-inner">
+                                    <span class="th-label" @onclick='() => ToggleSort("envio")'>Envio</span>
+                                    <span class="th-icons">
+                                        <span class="sort-icon" @onclick='() => ToggleSort("envio")'>
+                                            <span class="@(sortColumn == "envio" && sortAsc ? "sort-up-active" : "")">&#9650;</span>
+                                            <span class="@(sortColumn == "envio" && !sortAsc ? "sort-down-active" : "")">&#9660;</span>
+                                        </span>
+                                        <button class="filter-btn @(IsCheckboxFilterActive("envio") ? "filter-active" : "")" @onclick='() => ToggleDropdownFilter("envio")' @onclick:stopPropagation="true" title="Filtrar">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+                                        </button>
+                                    </span>
+                                </div>
+                                @if (activeFilterColumn == "envio")
+                                {
+                                    <div class="column-filter-dropdown" @onclick:stopPropagation="true">
+                                        <input type="text" class="filter-search-input" placeholder="Buscar..." @bind="checkboxSearchText" @bind:event="oninput" />
+                                        <div class="filter-checkbox-list">
+                                            @foreach (var val in GetUniqueValues("envio"))
+                                            {
+                                                var v = val;
+                                                <label class="filter-checkbox-item">
+                                                    <input type="checkbox" checked="@IsCheckboxChecked("envio", v)" @onchange='() => ToggleCheckboxValue("envio", v)' />
+                                                    @v
+                                                </label>
+                                            }
+                                        </div>
+                                        @if (IsCheckboxFilterActive("envio"))
+                                        {
+                                            <div class="filter-actions"><button class="filter-clear-btn" @onclick='() => ClearCheckboxFilter("envio")'>Limpiar</button></div>
+                                        }
+                                    </div>
+                                }
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -231,6 +270,7 @@
                                     <td>@group.Orders.First().DateCreated.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                                     <td>@group.Orders.First().AccountNickname</td>
                                     <td>@group.Orders.First().BuyerNickname</td>
+                                    <td></td>
                                     <td><em>@group.Orders.Count productos</em></td>
                                     <td>@group.Orders.Sum(o => o.Quantity)</td>
                                     <td></td>
@@ -240,6 +280,15 @@
                                             @GetStatusLabel(group.Orders.First().Status)
                                         </span>
                                     </td>
+                                    <td class="td-shipping-status">
+                                        @{ var gFirst = group.Orders.First(); }
+                                        @if (!string.IsNullOrEmpty(gFirst.ShippingStatus))
+                                        {
+                                            <span class="status-badge @GetShippingStatusClass(gFirst.ShippingStatus, gFirst.ShippingSubstatus)">
+                                                @GetShippingDisplayLabel(gFirst.ShippingStatus, gFirst.ShippingSubstatus)
+                                            </span>
+                                        }
+                                    </td>
                                 </tr>
                                 @foreach (var order in group.Orders)
                                 {
@@ -248,10 +297,23 @@
                                         <td></td>
                                         <td></td>
                                         <td></td>
+                                        <td class="td-thumbnail">
+                                            @if (!string.IsNullOrEmpty(order.ItemThumbnailUrl))
+                                            {
+                                                <img src="@order.ItemThumbnailUrl" alt="" class="order-thumbnail" />
+                                            }
+                                        </td>
                                         <td title="@order.ItemId">@Truncate(order.ItemTitle, 40)</td>
                                         <td>@order.Quantity</td>
-                                        <td>@order.CurrencyId @order.UnitPrice.ToString("N2")</td>
+                                        <td>
+                                            @if (order.FullUnitPrice.HasValue && order.FullUnitPrice.Value > order.UnitPrice)
+                                            {
+                                                <span class="price-original">@order.CurrencyId @order.FullUnitPrice.Value.ToString("N2")</span>
+                                            }
+                                            <span>@order.CurrencyId @order.UnitPrice.ToString("N2")</span>
+                                        </td>
                                         <td>@order.CurrencyId @((order.UnitPrice * order.Quantity).ToString("N2"))</td>
+                                        <td></td>
                                         <td></td>
                                     </tr>
                                 }
@@ -264,14 +326,34 @@
                                     <td>@order.DateCreated.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                                     <td>@order.AccountNickname</td>
                                     <td>@order.BuyerNickname</td>
+                                    <td class="td-thumbnail">
+                                        @if (!string.IsNullOrEmpty(order.ItemThumbnailUrl))
+                                        {
+                                            <img src="@order.ItemThumbnailUrl" alt="" class="order-thumbnail" />
+                                        }
+                                    </td>
                                     <td title="@order.ItemId">@Truncate(order.ItemTitle, 40)</td>
                                     <td>@order.Quantity</td>
-                                    <td>@order.CurrencyId @order.UnitPrice.ToString("N2")</td>
+                                    <td>
+                                        @if (order.FullUnitPrice.HasValue && order.FullUnitPrice.Value > order.UnitPrice)
+                                        {
+                                            <span class="price-original">@order.CurrencyId @order.FullUnitPrice.Value.ToString("N2")</span>
+                                        }
+                                        <span>@order.CurrencyId @order.UnitPrice.ToString("N2")</span>
+                                    </td>
                                     <td><strong>@order.CurrencyId @order.TotalAmount.ToString("N2")</strong></td>
                                     <td>
                                         <span class="status-badge @GetStatusClass(order.Status)">
                                             @GetStatusLabel(order.Status)
                                         </span>
+                                    </td>
+                                    <td class="td-shipping-status">
+                                        @if (!string.IsNullOrEmpty(order.ShippingStatus))
+                                        {
+                                            <span class="status-badge @GetShippingStatusClass(order.ShippingStatus, order.ShippingSubstatus)">
+                                                @GetShippingDisplayLabel(order.ShippingStatus, order.ShippingSubstatus)
+                                            </span>
+                                        }
                                     </td>
                                 </tr>
                             }
@@ -1217,6 +1299,7 @@
         {
             "cuenta" => orders.Select(o => o.AccountNickname).Distinct(),
             "estado" => orders.Select(o => GetStatusLabel(o.Status)).Distinct(),
+            "envio" => orders.Select(o => GetShippingDisplayLabel(o.ShippingStatus, o.ShippingSubstatus)).Where(s => s != "-").Distinct(),
             _ => Enumerable.Empty<string>()
         };
         var list = values.OrderBy(v => v).ToList();
@@ -1317,6 +1400,7 @@
         "precio" => "Precio Unit.",
         "total" => "Total",
         "estado" => "Estado",
+        "envio" => "Envio",
         _ => column
     };
 
@@ -1348,6 +1432,7 @@
             {
                 "cuenta" => filtered.Where(o => values.Contains(o.AccountNickname)),
                 "estado" => filtered.Where(o => values.Contains(GetStatusLabel(o.Status))),
+                "envio" => filtered.Where(o => values.Contains(GetShippingDisplayLabel(o.ShippingStatus, o.ShippingSubstatus))),
                 _ => filtered
             };
         }
@@ -1368,6 +1453,7 @@
                 "precio" => sortAsc ? list.OrderBy(o => o.UnitPrice).ToList() : list.OrderByDescending(o => o.UnitPrice).ToList(),
                 "total" => sortAsc ? list.OrderBy(o => o.TotalAmount).ToList() : list.OrderByDescending(o => o.TotalAmount).ToList(),
                 "estado" => sortAsc ? list.OrderBy(o => o.Status).ToList() : list.OrderByDescending(o => o.Status).ToList(),
+                "envio" => sortAsc ? list.OrderBy(o => o.ShippingStatus ?? "").ToList() : list.OrderByDescending(o => o.ShippingStatus ?? "").ToList(),
                 _ => list
             };
         }
@@ -1525,6 +1611,132 @@
         "invalid" => "Invalida",
         _ => status
     };
+
+    private string GetShippingStatusClass(string? status, string? substatus = null) => status switch
+    {
+        "delivered" => "status-active",
+        "shipped" => "status-shipping",
+        "ready_to_ship" => "status-warning",
+        "handling" => "status-handling",
+        "pending" => "",
+        "not_delivered" => "status-inactive",
+        "cancelled" => "status-inactive",
+        _ => ""
+    };
+
+    private string GetShippingStatusLabel(string? status, string? substatus = null) => status switch
+    {
+        "pending" => "Pendiente",
+        "handling" => "En preparacion",
+        "ready_to_ship" => "Listo para enviar",
+        "shipped" => "En camino",
+        "delivered" => "Entregado",
+        "not_delivered" => "No entregado",
+        "cancelled" => "Cancelado",
+        null or "" => "-",
+        _ => status
+    };
+
+    private string GetShippingSubstatusLabel(string? substatus) => substatus switch
+    {
+        // Pending
+        "cost_exceeded" => "Costo excedido",
+        "under_review" => "En revision",
+        "reviewed" => "Revisado",
+        "waiting_for_shipping_payment" => "Esperando pago de envio",
+        "shipment_paid" => "Envio pagado",
+        "route_created" => "Ruta creada",
+        "buffered" => "En espera",
+        "creating_shipping_order" => "Creando orden de envio",
+        "waiting_for_delivery" => "Esperando entrega",
+        "validating_receiver_documentation" => "Validando documentacion",
+        // Handling
+        "regenerating" => "Regenerando",
+        "waiting_for_label_generation" => "Generando etiqueta",
+        "invoice_pending" => "Factura pendiente",
+        "waiting_for_return_confirmation" => "Esperando confirmacion",
+        "return_confirmed" => "Devolucion confirmada",
+        "manufacturing" => "En fabricacion",
+        // Ready to ship
+        "ready_to_print" => "Etiqueta lista para imprimir",
+        "printed" => "Etiqueta impresa",
+        "in_pickup_list" => "En lista de retiro",
+        "ready_for_pickup" => "Listo para retiro",
+        "ready_for_drop_off" => "Listo para despacho",
+        "picked_up" => "Retirado",
+        "dropped_off" => "Despachado",
+        "in_hub" => "En centro de distribucion",
+        "in_warehouse" => "En deposito",
+        "ready_to_pack" => "Listo para empacar",
+        "measures_ready" => "Medidas listas",
+        "delayed" => "Demorado",
+        "in_transit" => "En transito",
+        "in_plp" => "En PLP",
+        "packed" => "Empacado",
+        "looking_for_driver" => "Buscando repartidor",
+        "bad_address" => "Direccion incorrecta",
+        "on_hold" => "En espera",
+        // Shipped
+        "soon_deliver" => "Pronto a entregar",
+        "waiting_for_withdrawal" => "Esperando retiro",
+        "receiver_absent" => "Destinatario ausente",
+        "contact_with_carrier_required" => "Contactar transportista",
+        "delivery_refused" => "Entrega rechazada",
+        "changed_address" => "Direccion cambiada",
+        "out_for_delivery" => "En reparto",
+        "delivery_failed" => "Entrega fallida",
+        "waiting_for_confirmation" => "Esperando confirmacion",
+        "shipment_at_buyers_door" => "En puerta del comprador",
+        "delivery_blocked" => "Entrega bloqueada",
+        "rescheduled_by_buyer" => "Reprogramado por comprador",
+        "rescheduled_by_meli" => "Reprogramado",
+        "at_customs" => "En aduana",
+        "delayed_at_customs" => "Demorado en aduana",
+        "left_customs" => "Salio de aduana",
+        "not_localized" => "No localizado",
+        "forwarded_to_third_party" => "Reenviado a tercero",
+        "under_investigation" => "En investigacion",
+        "withdrawn_by_sender" => "Retirado por vendedor",
+        // Delivered
+        "damaged" => "Danado",
+        "fulfilled_by_buyer_feedback" => "Confirmado por comprador",
+        "inferred_delivery" => "Entrega inferida",
+        // Not delivered
+        "returning_to_sender" => "En devolucion al vendedor",
+        "returned" => "Devuelto",
+        "destroyed" => "Destruido",
+        "returned_to_hub" => "Devuelto a centro",
+        "returned_to_agency" => "Devuelto a agencia",
+        "returning_to_warehouse" => "En devolucion a deposito",
+        "soon_to_be_returned" => "Pronto a devolver",
+        "return_failed" => "Devolucion fallida",
+        "in_storage" => "En almacenamiento",
+        "refused_delivery" => "Entrega rechazada",
+        "stolen" => "Robado",
+        "confiscated" => "Confiscado",
+        "package_lost" => "Paquete perdido",
+        "package_damaged_in_hub" => "Paquete danado",
+        "detained_at_customs" => "Retenido en aduana",
+        "recovered" => "Recuperado",
+        // Cancelled
+        "label_expired" => "Etiqueta vencida",
+        "cancelled_manually" => "Cancelado manualmente",
+        "cancelled_fraudulent" => "Cancelado por fraude",
+        "unfulfillable" => "No realizable",
+        "service_unavailable" => "Servicio no disponible",
+        "time_expired" => "Tiempo expirado",
+        "dismissed" => "Descartado",
+        null or "" => "",
+        _ => substatus?.Replace("_", " ")
+    };
+
+    private string GetShippingDisplayLabel(string? status, string? substatus)
+    {
+        var subLabel = GetShippingSubstatusLabel(substatus);
+        if (!string.IsNullOrEmpty(subLabel))
+            return subLabel;
+        return GetShippingStatusLabel(status, substatus);
+    }
 
     private string Truncate(string text, int maxLength) =>
         text.Length <= maxLength ? text : text[..maxLength] + "...";

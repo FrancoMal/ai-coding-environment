@@ -19,5 +19,6 @@ builder.Services.AddAuthorizationCore();
 // App services
 builder.Services.AddScoped<ApiClient>();
 builder.Services.AddScoped<ToastService>();
+builder.Services.AddScoped<SyncProgressTracker>();
 
 await builder.Build().RunAsync();

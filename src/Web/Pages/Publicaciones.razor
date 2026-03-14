@@ -3,6 +3,8 @@
 @inject ApiClient Api
 @inject ToastService ToastService
 @inject IJSRuntime JS
+@inject SyncProgressTracker SyncProgress
+@implements IDisposable
 
 <div class="card">
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
@@ -311,7 +313,20 @@
                                             <span>@item.CurrencyId @item.Price.ToString("N2")</span>
                                         }
                                     </td>
-                                    <td>@item.AvailableQuantity</td>
+                                    <td style="text-align: center; font-weight: 700;">
+                                        @if (item.ProductCriticalStock.HasValue && item.ProductCriticalStock.Value > 0 && item.AvailableQuantity <= item.ProductCriticalStock.Value)
+                                        {
+                                            <span class="stock-badge @(item.AvailableQuantity < item.ProductCriticalStock.Value ? "stock-critical" : "stock-warning")">@item.AvailableQuantity</span>
+                                        }
+                                        else if (item.ProductCriticalStock.HasValue && item.ProductCriticalStock.Value > 0 && item.AvailableQuantity > item.ProductCriticalStock.Value)
+                                        {
+                                            <span class="stock-badge stock-healthy">@item.AvailableQuantity</span>
+                                        }
+                                        else
+                                        {
+                                            @item.AvailableQuantity
+                                        }
+                                    </td>
                                     <td>@item.SoldQuantity</td>
                                     <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
                                     <td>@GetListingTypeLabel(item.ListingTypeId)</td>
@@ -385,7 +400,20 @@
                                             <span>@item.CurrencyId @item.Price.ToString("N2")</span>
                                         }
                                     </td>
-                                        <td>@item.AvailableQuantity</td>
+                                        <td style="text-align: center; font-weight: 700;">
+                                        @if (item.ProductCriticalStock.HasValue && item.ProductCriticalStock.Value > 0 && item.AvailableQuantity <= item.ProductCriticalStock.Value)
+                                        {
+                                            <span class="stock-badge @(item.AvailableQuantity < item.ProductCriticalStock.Value ? "stock-critical" : "stock-warning")">@item.AvailableQuantity</span>
+                                        }
+                                        else if (item.ProductCriticalStock.HasValue && item.ProductCriticalStock.Value > 0 && item.AvailableQuantity > item.ProductCriticalStock.Value)
+                                        {
+                                            <span class="stock-badge stock-healthy">@item.AvailableQuantity</span>
+                                        }
+                                        else
+                                        {
+                                            @item.AvailableQuantity
+                                        }
+                                    </td>
                                         <td>@item.SoldQuantity</td>
                                         <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
                                         <td>@GetListingTypeLabel(item.ListingTypeId)</td>
@@ -461,7 +489,20 @@
                                             <span>@item.CurrencyId @item.Price.ToString("N2")</span>
                                         }
                                     </td>
-                                            <td>@item.AvailableQuantity</td>
+                                            <td style="text-align: center; font-weight: 700;">
+                                        @if (item.ProductCriticalStock.HasValue && item.ProductCriticalStock.Value > 0 && item.AvailableQuantity <= item.ProductCriticalStock.Value)
+                                        {
+                                            <span class="stock-badge @(item.AvailableQuantity < item.ProductCriticalStock.Value ? "stock-critical" : "stock-warning")">@item.AvailableQuantity</span>
+                                        }
+                                        else if (item.ProductCriticalStock.HasValue && item.ProductCriticalStock.Value > 0 && item.AvailableQuantity > item.ProductCriticalStock.Value)
+                                        {
+                                            <span class="stock-badge stock-healthy">@item.AvailableQuantity</span>
+                                        }
+                                        else
+                                        {
+                                            @item.AvailableQuantity
+                                        }
+                                    </td>
                                             <td>@item.SoldQuantity</td>
                                             <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
                                             <td>@GetListingTypeLabel(item.ListingTypeId)</td>
@@ -510,7 +551,20 @@
                                             <span>@item.CurrencyId @item.Price.ToString("N2")</span>
                                         }
                                     </td>
-                                        <td>@item.AvailableQuantity</td>
+                                        <td style="text-align: center; font-weight: 700;">
+                                        @if (item.ProductCriticalStock.HasValue && item.ProductCriticalStock.Value > 0 && item.AvailableQuantity <= item.ProductCriticalStock.Value)
+                                        {
+                                            <span class="stock-badge @(item.AvailableQuantity < item.ProductCriticalStock.Value ? "stock-critical" : "stock-warning")">@item.AvailableQuantity</span>
+                                        }
+                                        else if (item.ProductCriticalStock.HasValue && item.ProductCriticalStock.Value > 0 && item.AvailableQuantity > item.ProductCriticalStock.Value)
+                                        {
+                                            <span class="stock-badge stock-healthy">@item.AvailableQuantity</span>
+                                        }
+                                        else
+                                        {
+                                            @item.AvailableQuantity
+                                        }
+                                    </td>
                                         <td>@item.SoldQuantity</td>
                                         <td><span class="status-badge @GetStatusClass(item.Status)">@GetStatusLabel(item.Status)</span></td>
                                         <td>@GetListingTypeLabel(item.ListingTypeId)</td>
@@ -1802,12 +1856,25 @@
                         <input type="text" class="form-input" placeholder="Escribi para filtrar..." @oninput="OnLinkSearchInput" />
                     </div>
                     <div class="link-product-list">
-                        @foreach (var p in GetFilteredProducts())
+                        @foreach (var scored in GetFilteredProducts())
                         {
-                            var prod = p;
-                            <button class="link-product-option" @onclick="() => LinkToProduct(prod.Id)">
-                                <span class="link-product-title">@Truncate(prod.Title, 40)</span>
-                                <span class="link-product-meta">$@prod.RetailPrice.ToString("N2") | Stock: @prod.Stock</span>
+                            var prod = scored.Product;
+                            var matchType = scored.MatchTag;
+                            <button class="link-product-option @(matchType != null ? "link-product-highlighted" : "")" @onclick="() => LinkToProduct(prod.Id)">
+                                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                                    <span class="link-product-title">@Truncate(prod.Title, 38)</span>
+                                    @if (matchType != null)
+                                    {
+                                        <span class="link-match-tag">@matchType</span>
+                                    }
+                                </div>
+                                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                                    <span class="link-product-meta">$@prod.RetailPrice.ToString("N2") | Stock: @prod.Stock</span>
+                                    @if (!string.IsNullOrEmpty(prod.Sku))
+                                    {
+                                        <span class="link-product-sku">SKU: @prod.Sku</span>
+                                    }
+                                </div>
                             </button>
                         }
                     </div>
@@ -1815,6 +1882,98 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" @onclick="CloseLinkProductModal">Cancelar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* Sync Progress Modal *@
+@if (SyncProgress.State.IsActive && SyncProgress.State.ShowModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>🔄 Sincronizando publicaciones</h3>
+            </div>
+            <div class="modal-body">
+                @if (SyncProgress.State.Status == "running")
+                {
+                    <div style="margin-bottom: 1rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="font-weight: 600;">@SyncProgress.State.CurrentStep</span>
+                            <span style="color: #666;">@SyncProgress.State.Percentage%</span>
+                        </div>
+                        <div class="sync-progress-bar-container">
+                            <div class="sync-progress-bar-fill" style="width: @(SyncProgress.State.Percentage)%"></div>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(SyncProgress.State.CurrentAccount))
+                    {
+                        <div class="sync-progress-detail">
+                            <div class="sync-detail-row">
+                                <span>👤 Cuenta:</span>
+                                <strong>@SyncProgress.State.CurrentAccount</strong>
+                                @if (SyncProgress.State.TotalAccounts > 0)
+                                {
+                                    <span class="sync-detail-badge">@SyncProgress.State.AccountIndex / @SyncProgress.State.TotalAccounts</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                    <div class="sync-progress-detail">
+                        <div class="sync-detail-row">
+                            <span>📦 Publicaciones encontradas:</span>
+                            <strong>@SyncProgress.State.TotalItemsFound</strong>
+                        </div>
+                        <div class="sync-detail-row">
+                            <span>✅ Sincronizadas:</span>
+                            <strong>@SyncProgress.State.ItemsSynced</strong>
+                        </div>
+                        @if (SyncProgress.State.TotalErrors > 0)
+                        {
+                            <div class="sync-detail-row" style="color: #dc3545;">
+                                <span>❌ Errores:</span>
+                                <strong>@SyncProgress.State.TotalErrors</strong>
+                            </div>
+                        }
+                    </div>
+                }
+                else if (SyncProgress.State.Status == "completed")
+                {
+                    <div style="text-align: center; padding: 1rem 0;">
+                        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">✅</div>
+                        <h4 style="margin: 0 0 0.5rem;">Sincronizacion completada</h4>
+                        <p style="color: #666; margin: 0;">
+                            @SyncProgress.State.ItemsSynced publicaciones sincronizadas
+                            @if (SyncProgress.State.TotalErrors > 0)
+                            {
+                                <span style="color: #dc3545;"> con @SyncProgress.State.TotalErrors errores</span>
+                            }
+                        </p>
+                    </div>
+                }
+                else if (SyncProgress.State.Status == "error")
+                {
+                    <div style="text-align: center; padding: 1rem 0;">
+                        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">❌</div>
+                        <h4 style="margin: 0 0 0.5rem;">Error en la sincronizacion</h4>
+                        <p style="color: #dc3545; margin: 0;">@SyncProgress.State.CurrentStep</p>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                @if (SyncProgress.State.Status == "running")
+                {
+                    <button class="btn btn-secondary" @onclick="SendSyncToBackground">
+                        Ejecutar en segundo plano
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-primary" @onclick="CloseSyncProgressModal">
+                        Cerrar
+                    </button>
+                }
             </div>
         </div>
     </div>
@@ -1914,8 +2073,34 @@
 
     protected override async Task OnInitializedAsync()
     {
+        SyncProgress.OnChange += OnSyncProgressChanged;
         await LoadItems();
         try { meliAccounts = await Api.GetMeliAccountsAsync(); } catch { }
+    }
+
+    private bool _syncReloaded;
+
+    private void OnSyncProgressChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            // Auto-reload items once when sync finishes
+            if (!_syncReloaded && (SyncProgress.State.Status == "completed" || SyncProgress.State.Status == "error"))
+            {
+                _syncReloaded = true;
+                await LoadItems();
+                StateHasChanged();
+            }
+            else
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    public void Dispose()
+    {
+        SyncProgress.OnChange -= OnSyncProgressChanged;
     }
 
     private async Task LoadItems()
@@ -1940,6 +2125,7 @@
         }
 
         isLoading = false;
+        StateHasChanged();
     }
 
     private void ToggleSyncMenu()
@@ -1953,29 +2139,39 @@
         isSyncing = true;
 
         // Build descriptive label
+        string description;
         if (status is not null)
+        {
             syncingLabel = $"Sincronizando {GetStatusLabel(status)}s...";
+            description = $"Sincronizando publicaciones {GetStatusLabel(status)}s";
+        }
         else if (accountId.HasValue && meliAccounts is not null)
         {
             var acc = meliAccounts.FirstOrDefault(a => a.Id == accountId.Value);
             syncingLabel = $"Sincronizando {acc?.Nickname ?? "cuenta"}...";
+            description = $"Sincronizando publicaciones de {acc?.Nickname ?? "cuenta"}";
         }
         else
+        {
             syncingLabel = "Sincronizando todo...";
+            description = "Sincronizando todas las publicaciones";
+        }
 
         StateHasChanged();
 
         try
         {
             var result = await Api.SyncMeliItemsAsync(status, accountId);
-            if (result is not null)
+            if (result is not null && !string.IsNullOrEmpty(result.ProgressId))
             {
-                if (result.TotalErrors > 0)
-                    ToastService.Warning($"Sincronizados {result.TotalSynced} items con {result.TotalErrors} errores");
-                else
-                    ToastService.Success($"Sincronizados {result.TotalSynced} items");
+                // Start progress tracking - sync runs in background on API
+                _syncReloaded = false;
+                SyncProgress.StartTracking(result.ProgressId, description);
             }
-            await LoadItems();
+            else
+            {
+                ToastService.Error("No se pudo iniciar la sincronizacion");
+            }
         }
         catch (Exception ex)
         {
@@ -1983,6 +2179,17 @@
         }
 
         isSyncing = false;
+    }
+
+    private void SendSyncToBackground()
+    {
+        SyncProgress.SendToBackground();
+    }
+
+    private async Task CloseSyncProgressModal()
+    {
+        SyncProgress.Dismiss();
+        await LoadItems();
     }
 
     // --- Sort ---
@@ -2916,13 +3123,90 @@
         linkSearchTerm = e.Value?.ToString() ?? "";
     }
 
-    private List<ProductDto> GetFilteredProducts()
+    private record ScoredProduct(ProductDto Product, int Score, string? MatchTag);
+
+    private List<ScoredProduct> GetFilteredProducts()
     {
         if (allProducts is null) return new();
-        if (string.IsNullOrWhiteSpace(linkSearchTerm)) return allProducts;
-        return allProducts.Where(p => p.Title.Contains(linkSearchTerm, StringComparison.OrdinalIgnoreCase)
-            || (p.Brand ?? "").Contains(linkSearchTerm, StringComparison.OrdinalIgnoreCase)
-            || (p.Model ?? "").Contains(linkSearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        var itemTitle = linkProductItem?.Title ?? "";
+        var itemSku = linkProductItem?.Sku?.Trim();
+        var itemUserProductId = linkProductItem?.UserProductId?.Trim();
+        var searchTerm = linkSearchTerm?.Trim() ?? "";
+
+        // Palabras del titulo de la publicacion (ignorar palabras cortas)
+        var titleWords = itemTitle
+            .Split(new[] { ' ', '-', '/', '|', ',', '(', ')' }, StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => w.Length >= 3)
+            .Select(w => w.ToLowerInvariant())
+            .Distinct()
+            .ToList();
+
+        var results = new List<ScoredProduct>();
+
+        foreach (var p in allProducts)
+        {
+            int score = 0;
+            string? matchTag = null;
+
+            // 1. SKU exacto de la publicacion coincide con SKU del producto (maximo peso)
+            if (!string.IsNullOrEmpty(itemSku) && !string.IsNullOrEmpty(p.Sku)
+                && string.Equals(itemSku, p.Sku.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                score += 1000;
+                matchTag = "SKU exacto";
+            }
+
+            // 2. UserProductId coincide con SKU del producto
+            if (!string.IsNullOrEmpty(itemUserProductId) && !string.IsNullOrEmpty(p.Sku)
+                && string.Equals(itemUserProductId, p.Sku.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                score += 800;
+                matchTag ??= "ID producto";
+            }
+
+            // 3. SKU parcial (uno contiene al otro)
+            if (!string.IsNullOrEmpty(itemSku) && !string.IsNullOrEmpty(p.Sku))
+            {
+                var pSku = p.Sku.Trim();
+                if (pSku.Contains(itemSku, StringComparison.OrdinalIgnoreCase)
+                    || itemSku.Contains(pSku, StringComparison.OrdinalIgnoreCase))
+                {
+                    score += 500;
+                    matchTag ??= "SKU similar";
+                }
+            }
+
+            // 4. Coincidencia de palabras del titulo
+            var pTitle = p.Title.ToLowerInvariant();
+            int wordMatches = titleWords.Count(w => pTitle.Contains(w));
+            if (wordMatches > 0)
+            {
+                score += wordMatches * 50;
+                if (wordMatches >= 3 && matchTag is null)
+                    matchTag = $"{wordMatches} palabras";
+            }
+
+            // 5. Coincidencia con marca/modelo
+            if (!string.IsNullOrEmpty(p.Brand) && itemTitle.Contains(p.Brand, StringComparison.OrdinalIgnoreCase))
+                score += 100;
+            if (!string.IsNullOrEmpty(p.Model) && itemTitle.Contains(p.Model, StringComparison.OrdinalIgnoreCase))
+                score += 100;
+
+            // Filtro por texto de busqueda manual
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                bool matchesSearch = p.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                    || (p.Brand ?? "").Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                    || (p.Model ?? "").Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                    || (p.Sku ?? "").Contains(searchTerm, StringComparison.OrdinalIgnoreCase);
+                if (!matchesSearch) continue;
+            }
+
+            results.Add(new ScoredProduct(p, score, matchTag));
+        }
+
+        return results.OrderByDescending(r => r.Score).ThenBy(r => r.Product.Title).ToList();
     }
 
     private async Task LinkToProduct(int productId)

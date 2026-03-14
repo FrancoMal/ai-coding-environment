@@ -14,9 +14,11 @@ public class ProductDto
     public decimal CostPrice { get; set; }
     public decimal RetailPrice { get; set; }
     public int Stock { get; set; }
+    public int CriticalStock { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public List<ProductAccountLinkDto> LinkedAccounts { get; set; } = new();
 }
 
 public class CreateProductRequest
@@ -32,6 +34,7 @@ public class CreateProductRequest
     public decimal CostPrice { get; set; }
     public decimal RetailPrice { get; set; }
     public int Stock { get; set; }
+    public int CriticalStock { get; set; }
 }
 
 public class UpdateProductRequest
@@ -47,7 +50,14 @@ public class UpdateProductRequest
     public decimal? CostPrice { get; set; }
     public decimal? RetailPrice { get; set; }
     public int? Stock { get; set; }
+    public int? CriticalStock { get; set; }
     public bool? IsActive { get; set; }
+}
+
+public class ProductAccountLinkDto
+{
+    public string Nickname { get; set; } = string.Empty;
+    public int Count { get; set; }
 }
 
 public class BulkCreateProductResult

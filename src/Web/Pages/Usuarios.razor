@@ -3,24 +3,19 @@
 @inject ApiClient Api
 @inject ToastService ToastService
 
-<div class="view-header">
-    <h2>Gestion de Usuarios</h2>
-    <p class="view-subtitle">Administra los usuarios del sistema</p>
-</div>
-
 <div class="card">
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-        <h3>Usuarios</h3>
+        <h3>Usuarios (@(users?.Count ?? 0))</h3>
         <button class="btn btn-primary" @onclick="ShowCreateForm">+ Nuevo Usuario</button>
     </div>
-    <div class="card-body">
+    <div class="card-body" style="padding: 0;">
         @if (isLoading)
         {
-            <p class="text-muted">Cargando...</p>
+            <p class="text-muted" style="padding: 1.5rem;">Cargando...</p>
         }
         else if (users is null || !users.Any())
         {
-            <p class="text-muted">No hay usuarios registrados</p>
+            <p class="text-muted" style="padding: 1.5rem;">No hay usuarios registrados</p>
         }
         else
         {

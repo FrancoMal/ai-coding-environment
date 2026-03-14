@@ -24,6 +24,11 @@ public class ApiClient
         return await GetAsync<DashboardStats>("/api/dashboard/stats");
     }
 
+    public async Task<SystemInfoDto?> GetSystemInfoAsync()
+    {
+        return await GetAsync<SystemInfoDto>("/api/system/info");
+    }
+
     public async Task<UserDto?> GetMeAsync()
     {
         return await GetAsync<UserDto>("/api/auth/me");
@@ -69,6 +74,11 @@ public class ApiClient
     public async Task<bool> DeleteRoleAsync(int id)
     {
         return await DeleteAsync($"/api/roles/{id}");
+    }
+
+    public async Task<List<MenuTreeDto>?> GetMenuTreeAsync()
+    {
+        return await GetAsync<List<MenuTreeDto>>("/api/roles/menu-tree");
     }
 
     // --- Profile ---
@@ -133,6 +143,18 @@ public class ApiClient
         return await PutAsync<ProductDto>($"/api/products/{id}", request);
     }
 
+    public async Task<int> BulkDeleteProductsAsync(List<int> ids)
+    {
+        var result = await PostAsync<Dictionary<string, int>>("/api/products/bulk-delete", new { ids });
+        return result?.GetValueOrDefault("deleted") ?? 0;
+    }
+
+    public async Task<int> BulkToggleProductStatusAsync(List<int> ids, bool isActive)
+    {
+        var result = await PutAsync<Dictionary<string, int>>("/api/products/bulk-toggle-status", new { ids, isActive });
+        return result?.GetValueOrDefault("updated") ?? 0;
+    }
+
     public async Task<bool> DeleteProductAsync(int id)
     {
         return await DeleteAsync($"/api/products/{id}");
@@ -157,6 +179,35 @@ public class ApiClient
     public async Task<bool> DeleteIntegrationAsync(string provider)
     {
         return await DeleteAsync($"/api/integrations/{provider}");
+    }
+
+    public async Task<string?> TestEmailAsync()
+    {
+        await SetAuthHeaderAsync();
+        var response = await _http.PostAsync("/api/integrations/email-smtp/test", null);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await _authService.LogoutAsync();
+            _navigation.NavigateTo("/login", forceLoad: true);
+            return null;
+        }
+
+        var body = await response.Content.ReadAsStringAsync();
+        try
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("message", out var msg))
+                return msg.GetString();
+            if (doc.RootElement.TryGetProperty("error", out var err))
+                throw new Exception(err.GetString());
+        }
+        catch (System.Text.Json.JsonException) { }
+
+        if (!response.IsSuccessStatusCode)
+            throw new Exception($"Error del servidor ({response.StatusCode})");
+
+        return body;
     }
 
     // --- MercadoLibre Accounts ---
@@ -223,6 +274,13 @@ public class ApiClient
         if (accountId.HasValue) queryParams.Add($"accountId={accountId.Value}");
         if (queryParams.Any()) url += "?" + string.Join("&", queryParams);
         return await PostAsync<MeliItemSyncResult>(url, new { });
+    }
+
+    public async Task<SyncProgressResponse?> GetSyncProgressAsync(string? id = null)
+    {
+        var url = "/api/meli/items/sync/progress";
+        if (!string.IsNullOrEmpty(id)) url += $"?id={id}";
+        return await GetAsync<SyncProgressResponse>(url);
     }
 
     public async Task<List<ItemPromotionDto>?> GetItemPromotionsAsync(string meliItemId)
@@ -545,4 +603,30 @@ public class ApiClient
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
     }
+
+    public async Task<BulkPublishResponse?> BulkPublishAsync(BulkPublishRequest request)
+    {
+        await SetAuthHeaderAsync();
+        var response = await _http.PostAsJsonAsync("/api/meli/publish/bulk", request);
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await _authService.LogoutAsync();
+            _navigation.NavigateTo("/login", forceLoad: true);
+            return null;
+        }
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync();
+            try
+            {
+                var doc = System.Text.Json.JsonDocument.Parse(errorBody);
+                if (doc.RootElement.TryGetProperty("error", out var errorProp))
+                    throw new Exception(errorProp.GetString());
+            }
+            catch (System.Text.Json.JsonException) { }
+            throw new Exception("Error del servidor (" + response.StatusCode + ")");
+        }
+        return await response.Content.ReadFromJsonAsync<BulkPublishResponse>();
+    }
+
 }

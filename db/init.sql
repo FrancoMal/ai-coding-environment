@@ -133,8 +133,11 @@ BEGIN
         ItemTitle NVARCHAR(500) NOT NULL,
         Quantity INT NOT NULL,
         UnitPrice DECIMAL(18,2) NOT NULL,
+        FullUnitPrice DECIMAL(18,2) NULL,
         ShippingId BIGINT NULL,
         PackId BIGINT NULL,
+        ShippingStatus NVARCHAR(50) NULL,
+        ShippingSubstatus NVARCHAR(100) NULL,
         CreatedAt DATETIME2 DEFAULT GETDATE(),
         UpdatedAt DATETIME2 NULL,
         CONSTRAINT FK_MeliOrders_MeliAccounts FOREIGN KEY (MeliAccountId) REFERENCES MeliAccounts(Id)
@@ -152,6 +155,27 @@ IF EXISTS (SELECT * FROM sysobjects WHERE name='MeliOrders' AND xtype='U')
 BEGIN
     ALTER TABLE MeliOrders ADD PackId BIGINT NULL;
     CREATE INDEX IX_MeliOrders_PackId ON MeliOrders (PackId);
+END
+GO
+
+-- Add ShippingStatus column if table already exists
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MeliOrders') AND name = 'ShippingStatus')
+BEGIN
+    ALTER TABLE MeliOrders ADD ShippingStatus NVARCHAR(50) NULL;
+END
+GO
+
+-- Add ShippingSubstatus column if table already exists
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MeliOrders') AND name = 'ShippingSubstatus')
+BEGIN
+    ALTER TABLE MeliOrders ADD ShippingSubstatus NVARCHAR(100) NULL;
+END
+GO
+
+-- Add FullUnitPrice column if table already exists
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MeliOrders') AND name = 'FullUnitPrice')
+BEGIN
+    ALTER TABLE MeliOrders ADD FullUnitPrice DECIMAL(18,2) NULL;
 END
 GO
 
@@ -316,6 +340,7 @@ BEGIN
         CostPrice DECIMAL(18,2) NOT NULL DEFAULT 0,
         RetailPrice DECIMAL(18,2) NOT NULL DEFAULT 0,
         Stock INT NOT NULL DEFAULT 0,
+        CriticalStock INT DEFAULT 0,
         IsActive BIT NOT NULL DEFAULT 1,
         CreatedAt DATETIME2 DEFAULT GETDATE(),
         UpdatedAt DATETIME2 NULL
@@ -335,10 +360,67 @@ END
 GO
 
 
+-- Add StockDiscounted to MeliOrders
+IF EXISTS (SELECT * FROM sysobjects WHERE name='MeliOrders' AND xtype='U')
+   AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('MeliOrders') AND name = 'StockDiscounted')
+BEGIN
+    ALTER TABLE MeliOrders ADD StockDiscounted BIT NOT NULL DEFAULT 0;
+END
+GO
+
+-- Seed ProcessOrderStock scheduled process
+IF NOT EXISTS (SELECT * FROM ScheduledProcesses WHERE Code = 'ProcessOrderStock')
+BEGIN
+    INSERT INTO ScheduledProcesses (Code, Name, Description, TriggerType, IntervalMinutes, IsEnabled)
+    VALUES ('ProcessOrderStock', 'Descontar Stock por Ordenes', 'Descuenta el stock de los productos vinculados cuando entran ordenes nuevas y propaga el cambio a todas las cuentas', 'Interval', 360, 0);
+END
+GO
+
 -- Add SKU to Products
 IF EXISTS (SELECT * FROM sysobjects WHERE name='Products' AND xtype='U')
    AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Products') AND name = 'Sku')
 BEGIN
     ALTER TABLE Products ADD Sku NVARCHAR(100) NULL;
+END
+GO
+
+-- Add CriticalStock to Products
+IF EXISTS (SELECT * FROM sysobjects WHERE name='Products' AND xtype='U')
+   AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Products') AND name = 'CriticalStock')
+BEGIN
+    ALTER TABLE Products ADD CriticalStock INT DEFAULT 0;
+END
+GO
+
+-- RolePermissions table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='RolePermissions' AND xtype='U')
+BEGIN
+    CREATE TABLE RolePermissions (
+        Id INT PRIMARY KEY IDENTITY(1,1),
+        RoleId INT NOT NULL,
+        MenuKey NVARCHAR(50) NOT NULL,
+        CONSTRAINT FK_RolePermissions_Roles FOREIGN KEY (RoleId) REFERENCES Roles(Id) ON DELETE CASCADE,
+        CONSTRAINT UQ_RolePermissions UNIQUE (RoleId, MenuKey)
+    );
+    CREATE INDEX IX_RolePermissions_RoleId ON RolePermissions (RoleId);
+END
+GO
+
+-- Seed admin permissions (all menus)
+IF NOT EXISTS (SELECT * FROM RolePermissions WHERE RoleId = 1)
+BEGIN
+    INSERT INTO RolePermissions (RoleId, MenuKey) VALUES
+    (1, 'dashboard'), (1, 'publicaciones'), (1, 'ordenes'),
+    (1, 'productos'), (1, 'usuarios'), (1, 'roles'),
+    (1, 'integraciones'), (1, 'procesos'), (1, 'auditoria'), (1, 'config');
+END
+GO
+
+-- Seed usuario permissions (basic menus)
+IF NOT EXISTS (SELECT * FROM RolePermissions WHERE RoleId = 2)
+BEGIN
+    INSERT INTO RolePermissions (RoleId, MenuKey) VALUES
+    (2, 'dashboard'), (2, 'publicaciones'), (2, 'ordenes'),
+    (2, 'productos'), (2, 'config');
 END
 GO

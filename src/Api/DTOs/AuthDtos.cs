@@ -17,7 +17,8 @@ public record AuthResponse(
     string Token,
     string Username,
     string Role,
-    DateTime ExpiresAt
+    DateTime ExpiresAt,
+    List<string> Permissions
 );
 
 public record UserDto(

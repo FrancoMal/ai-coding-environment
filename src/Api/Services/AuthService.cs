@@ -29,7 +29,7 @@ public class AuthService
         if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
             return null;
 
-        return GenerateAuthResponse(user);
+        return await GenerateAuthResponseAsync(user);
     }
 
     public async Task<AuthResponse?> Register(string username, string email, string password)
@@ -54,10 +54,10 @@ public class AuthService
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        return GenerateAuthResponse(user);
+        return await GenerateAuthResponseAsync(user);
     }
 
-    private AuthResponse GenerateAuthResponse(User user)
+    private async Task<AuthResponse> GenerateAuthResponseAsync(User user)
     {
         var expirationHours = _config.GetValue<int>("Jwt:ExpirationHours", 24);
         var expiresAt = DateTime.UtcNow.AddHours(expirationHours);
@@ -82,11 +82,27 @@ public class AuthService
             signingCredentials: creds
         );
 
+        // Get permissions for this role
+        var roleName = user.RoleNav?.Name ?? user.Role;
+        List<string> permissions;
+        if (roleName.Equals("admin", StringComparison.OrdinalIgnoreCase))
+        {
+            permissions = MenuDefinition.AllMenuKeys;
+        }
+        else
+        {
+            permissions = await _db.RolePermissions
+                .Where(rp => rp.RoleId == user.RoleId)
+                .Select(rp => rp.MenuKey)
+                .ToListAsync();
+        }
+
         return new AuthResponse(
             Token: new JwtSecurityTokenHandler().WriteToken(token),
             Username: user.Username,
-            Role: user.RoleNav?.Name ?? user.Role,
-            ExpiresAt: expiresAt
+            Role: roleName,
+            ExpiresAt: expiresAt,
+            Permissions: permissions
         );
     }
 }

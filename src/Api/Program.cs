@@ -54,10 +54,12 @@ builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<ScheduledProcessService>();
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<AiService>();
+builder.Services.AddSingleton<SyncProgressService>();
 
 // Background Jobs
 builder.Services.AddSingleton<IScheduledJob, SyncMeliOrdersJob>();
 builder.Services.AddSingleton<IScheduledJob, SyncMeliItemsJob>();
+builder.Services.AddSingleton<IScheduledJob, ProcessOrderStockJob>();
 builder.Services.AddHostedService<ProcessSchedulerService>();
 
 // CORS
@@ -130,6 +132,13 @@ using (var scope = app.Services.CreateScope())
         admin.PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123");
         await db.SaveChangesAsync();
     }
+}
+
+// Sync admin permissions with MenuDefinition
+{
+    using var scope = app.Services.CreateScope();
+    var roleService = scope.ServiceProvider.GetRequiredService<RoleService>();
+    await roleService.SyncAdminPermissionsAsync();
 }
 
 // Middleware pipeline

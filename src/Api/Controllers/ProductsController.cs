@@ -55,4 +55,24 @@ public class ProductsController : ControllerBase
         if (!result) return NotFound(new { message = "Producto no encontrado" });
         return NoContent();
     }
+
+    [HttpPost("bulk-delete")]
+    public async Task<IActionResult> BulkDelete([FromBody] BulkProductIdsRequest request)
+    {
+        if (request.Ids == null || !request.Ids.Any())
+            return BadRequest(new { message = "No se enviaron IDs" });
+
+        var deleted = await _productService.BulkDeleteAsync(request.Ids);
+        return Ok(new { deleted });
+    }
+
+    [HttpPut("bulk-toggle-status")]
+    public async Task<IActionResult> BulkToggleStatus([FromBody] BulkToggleStatusRequest request)
+    {
+        if (request.Ids == null || !request.Ids.Any())
+            return BadRequest(new { message = "No se enviaron IDs" });
+
+        var updated = await _productService.BulkToggleStatusAsync(request.Ids, request.IsActive);
+        return Ok(new { updated });
+    }
 }

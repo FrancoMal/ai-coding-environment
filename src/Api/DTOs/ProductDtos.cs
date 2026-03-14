@@ -2,6 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Api.DTOs;
 
+public record ProductAccountLinkDto(string Nickname, int Count);
+
 public record ProductListDto(
     int Id,
     string Title,
@@ -15,9 +17,11 @@ public record ProductListDto(
     decimal CostPrice,
     decimal RetailPrice,
     int Stock,
+    int CriticalStock,
     bool IsActive,
     DateTime CreatedAt,
-    DateTime? UpdatedAt
+    DateTime? UpdatedAt,
+    List<ProductAccountLinkDto> LinkedAccounts
 );
 
 public record CreateProductRequest(
@@ -31,7 +35,8 @@ public record CreateProductRequest(
     string? Photo3,
     decimal CostPrice,
     decimal RetailPrice,
-    int Stock
+    int Stock,
+    int CriticalStock
 );
 
 public record UpdateProductRequest(
@@ -46,5 +51,10 @@ public record UpdateProductRequest(
     decimal? CostPrice,
     decimal? RetailPrice,
     int? Stock,
+    int? CriticalStock,
     bool? IsActive
 );
+
+public record BulkProductIdsRequest(List<int> Ids);
+
+public record BulkToggleStatusRequest(List<int> Ids, bool IsActive);

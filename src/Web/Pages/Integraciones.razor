@@ -7,11 +7,74 @@
 
 <div class="view-header">
     <h2>Integraciones</h2>
-    <p class="view-subtitle">Configura las integraciones con servicios externos</p>
+    <div class="view-header-actions">
+        @if (HasAvailableIntegrations)
+        {
+            <div class="add-integration-wrapper">
+                <button class="btn btn-primary" @onclick="ToggleAddMenu">+ Nueva Integracion</button>
+                @if (showAddMenu)
+                {
+                    <div class="add-integration-dropdown">
+                        @if (mlId == 0)
+                        {
+                            <button class="add-integration-option" @onclick="() => AddIntegration_ML()">
+                                <span class="integration-logo-icon ml-logo" style="width:28px;height:28px;font-size:0.7rem;">ML</span>
+                                <div>
+                                    <strong>MercadoLibre</strong>
+                                    <small>Gestionar publicaciones, ordenes y mas</small>
+                                </div>
+                            </button>
+                        }
+                        @if (openaiId == 0)
+                        {
+                            <button class="add-integration-option" @onclick="() => AddIntegration_OpenAI()">
+                                <span class="integration-logo-icon openai-logo" style="width:28px;height:28px;font-size:0.7rem;">AI</span>
+                                <div>
+                                    <strong>OpenAI</strong>
+                                    <small>Modelos GPT para funciones de IA</small>
+                                </div>
+                            </button>
+                        }
+                        @if (claudeId == 0)
+                        {
+                            <button class="add-integration-option" @onclick="() => AddIntegration_Claude()">
+                                <span class="integration-logo-icon claude-logo" style="width:28px;height:28px;font-size:0.7rem;">CL</span>
+                                <div>
+                                    <strong>Claude (Anthropic)</strong>
+                                    <small>Modelos Claude para funciones de IA</small>
+                                </div>
+                            </button>
+                        }
+                        @if (emailId == 0)
+                        {
+                            <button class="add-integration-option" @onclick="() => AddIntegration_Email()">
+                                <span class="integration-logo-icon email-logo" style="width:28px;height:28px;font-size:0.85rem;">&#9993;</span>
+                                <div>
+                                    <strong>Email (SMTP)</strong>
+                                    <small>Enviar y recibir emails desde el sistema</small>
+                                </div>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
 </div>
 
+@if (!HasConfiguredIntegrations)
+{
+    <div class="empty-state">
+        <div class="empty-state-icon">🔌</div>
+        <h3>No hay integraciones configuradas</h3>
+        <p>Hace clic en "+ Nueva Integracion" para agregar tu primera integracion con un servicio externo.</p>
+    </div>
+}
+
 <div class="integrations-grid">
-    <!-- MercadoLibre -->
+    <!-- MercadoLibre (solo si esta configurada) -->
+    @if (mlId > 0)
+    {
     <div class="integration-card @(mlActive ? "integration-active" : "")">
         <div class="integration-card-header">
             <div class="integration-logo">
@@ -30,7 +93,7 @@
         </div>
 
         <!-- Cuentas conectadas -->
-        @if (mlId > 0 && mlActive)
+        @if (mlActive)
         {
             <div class="integration-accounts">
                 <div class="integration-accounts-header">
@@ -115,14 +178,17 @@
                 }
             </div>
         }
-        else if (mlId == 0)
+        else
         {
             <div style="padding: 1rem 1.5rem;">
                 <p class="text-muted">Configura la aplicacion para comenzar a conectar cuentas.</p>
             </div>
         }
     </div>
-    <!-- OpenAI -->
+    }
+    <!-- OpenAI (solo si esta configurada) -->
+    @if (openaiId > 0)
+    {
     <div class="integration-card @(openaiActive ? "integration-active" : "")">
         <div class="integration-card-header">
             <div class="integration-logo">
@@ -163,15 +229,12 @@
                 </div>
             </div>
         }
-        else if (openaiId == 0)
-        {
-            <div style="padding: 1rem 1.5rem;">
-                <p class="text-muted">Configura tu API Key de OpenAI para habilitar las funciones de inteligencia artificial.</p>
-            </div>
-        }
     </div>
+    }
 
-    <!-- Claude (Anthropic) -->
+    <!-- Claude (solo si esta configurada) -->
+    @if (claudeId > 0)
+    {
     <div class="integration-card @(claudeActive ? "integration-active" : "")">
         <div class="integration-card-header">
             <div class="integration-logo">
@@ -212,13 +275,62 @@
                 </div>
             </div>
         }
-        else if (claudeId == 0)
+    </div>
+    }
+
+    <!-- Email SMTP (solo si esta configurada) -->
+    @if (emailId > 0)
+    {
+    <div class="integration-card @(emailActive ? "integration-active" : "")">
+        <div class="integration-card-header">
+            <div class="integration-logo">
+                <span class="integration-logo-icon email-logo">&#9993;</span>
+            </div>
+            <div class="integration-info">
+                <h3>Email (SMTP/IMAP)</h3>
+                <p>Envia y recibe emails desde el sistema usando tu cuenta de correo.</p>
+            </div>
+            <div class="integration-header-actions">
+                <span class="status-badge @(emailActive ? "status-active" : "status-inactive")">
+                    @(emailActive ? "Activa" : "Inactiva")
+                </span>
+                <button class="btn btn-secondary btn-sm" @onclick="OpenEmailModal">Configurar</button>
+            </div>
+        </div>
+
+        @if (emailId > 0 && emailActive)
         {
-            <div style="padding: 1rem 1.5rem;">
-                <p class="text-muted">Configura tu API Key de Anthropic para habilitar las funciones con Claude.</p>
+            <div class="integration-accounts" style="padding: 1rem 1.5rem;">
+                <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                    <div>
+                        <small class="text-muted">Servidor SMTP</small>
+                        <div><strong>@emailSmtpHost</strong></div>
+                    </div>
+                    <div>
+                        <small class="text-muted">Puerto</small>
+                        <div><strong>@emailSmtpPort</strong></div>
+                    </div>
+                    <div>
+                        <small class="text-muted">Remitente</small>
+                        <div><strong>@emailFromAddress</strong></div>
+                    </div>
+                    <div>
+                        <small class="text-muted">TLS</small>
+                        <div><strong>@(emailSmtpTls ? "Si" : "No")</strong></div>
+                    </div>
+                    <div>
+                        <small class="text-muted">IMAP</small>
+                        <div><strong>@(string.IsNullOrEmpty(emailImapHost) ? "No configurado" : emailImapHost)</strong></div>
+                    </div>
+                    <div>
+                        <small class="text-muted">Contraseña</small>
+                        <div><strong>@(emailHasSecret ? "Configurada" : "No configurada")</strong></div>
+                    </div>
+                </div>
             </div>
         }
     </div>
+    }
 </div>
 
 <!-- Modal: Configuracion MercadoLibre -->
@@ -519,6 +631,102 @@
     </div>
 }
 
+<!-- Modal: Configuracion Email SMTP -->
+@if (showEmailModal)
+{
+    <div class="modal-overlay" @onclick="CloseEmailModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Configuracion de Email</h3>
+                <button class="btn-close" @onclick="CloseEmailModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h4 style="margin-bottom: 0.75rem; color: var(--text-primary);">Envio (SMTP)</h4>
+                <div class="form-row">
+                    <div class="form-group" style="flex:2">
+                        <label class="form-label">Servidor SMTP</label>
+                        <input type="text" class="form-input" @bind="emailSmtpHost" placeholder="smtp.gmail.com" />
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">Puerto</label>
+                        <input type="number" class="form-input" @bind="emailSmtpPort" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" @bind="emailSmtpTls" /> Usar TLS/SSL
+                    </label>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">Nombre remitente</label>
+                        <input type="text" class="form-input" @bind="emailFromName" placeholder="Mi Empresa" />
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">Email remitente</label>
+                        <input type="email" class="form-input" @bind="emailFromAddress" placeholder="info@empresa.com" />
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">Usuario</label>
+                        <input type="text" class="form-input" @bind="emailUsername" placeholder="Igual al email si no se especifica" />
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">Contraseña</label>
+                        <input type="password" class="form-input" @bind="emailPassword"
+                               placeholder="@(emailHasSecret ? "••••••••  (ya configurada)" : "Contraseña o App Password")" />
+                    </div>
+                </div>
+
+                <hr style="margin: 1.25rem 0; border: none; border-top: 1px solid var(--border);" />
+
+                <h4 style="margin-bottom: 0.75rem; color: var(--text-primary);">Lectura (IMAP)</h4>
+                <div class="form-row">
+                    <div class="form-group" style="flex:2">
+                        <label class="form-label">Servidor IMAP</label>
+                        <input type="text" class="form-input" @bind="emailImapHost" placeholder="imap.gmail.com" />
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">Puerto</label>
+                        <input type="number" class="form-input" @bind="emailImapPort" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" @bind="emailImapTls" /> Usar TLS/SSL
+                    </label>
+                </div>
+
+                <hr style="margin: 1.25rem 0; border: none; border-top: 1px solid var(--border);" />
+
+                <div class="form-group">
+                    <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" @bind="emailActive" /> Activo
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                @if (emailId > 0)
+                {
+                    <button class="btn btn-danger" @onclick="DeleteEmail" disabled="@emailSaving" style="margin-right: auto;">
+                        Eliminar
+                    </button>
+                }
+                <button class="btn btn-outline-primary" @onclick="TestEmail" disabled="@(emailSaving || emailTesting)">
+                    @(emailTesting ? "Enviando..." : "Enviar prueba")
+                </button>
+                <button class="btn btn-secondary" @onclick="CloseEmailModal">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SaveEmail" disabled="@emailSaving">
+                    @(emailSaving ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     // MercadoLibre config fields
     private int mlId;
@@ -560,6 +768,24 @@
     private bool loadingClaudeModels;
     private string? claudeModelsError;
 
+    // Email SMTP config fields
+    private int emailId;
+    private bool emailActive;
+    private bool emailHasSecret;
+    private string emailSmtpHost = "smtp.gmail.com";
+    private int emailSmtpPort = 587;
+    private bool emailSmtpTls = true;
+    private string emailImapHost = "imap.gmail.com";
+    private int emailImapPort = 993;
+    private bool emailImapTls = true;
+    private string emailFromName = "";
+    private string emailFromAddress = "";
+    private string emailUsername = "";
+    private string emailPassword = "";
+    private bool showEmailModal;
+    private bool emailSaving;
+    private bool emailTesting;
+
     // Accounts
     private List<MeliAccountDto>? accounts;
     private bool connecting;
@@ -568,6 +794,11 @@
     private MeliAccountStatsDto? deleteStats;
     private string deleteConfirmText = "";
     private bool deletingAccount;
+
+    // Add integration menu
+    private bool showAddMenu;
+    private bool HasConfiguredIntegrations => mlId > 0 || openaiId > 0 || claudeId > 0 || emailId > 0;
+    private bool HasAvailableIntegrations => mlId == 0 || openaiId == 0 || claudeId == 0 || emailId == 0;
 
     // Connect flow
     private bool showConnectMenu;
@@ -581,6 +812,7 @@
         await LoadMercadoLibre();
         await LoadOpenAi();
         await LoadClaude();
+        await LoadEmail();
         await LoadAccounts();
     }
 
@@ -889,7 +1121,183 @@
         }
     }
 
-        private void OpenConfigModal()
+    // --- Email SMTP Methods ---
+    private async Task LoadEmail()
+    {
+        try
+        {
+            var integration = await Api.GetIntegrationAsync("email-smtp");
+            if (integration is not null)
+            {
+                emailId = integration.Id;
+                emailActive = integration.IsActive;
+                emailHasSecret = integration.HasSecret;
+                if (!string.IsNullOrEmpty(integration.Settings))
+                {
+                    try
+                    {
+                        var doc = System.Text.Json.JsonDocument.Parse(integration.Settings);
+                        var root = doc.RootElement;
+                        if (root.TryGetProperty("smtpHost", out var sh)) emailSmtpHost = sh.GetString() ?? "smtp.gmail.com";
+                        if (root.TryGetProperty("smtpPort", out var sp)) emailSmtpPort = sp.GetInt32();
+                        if (root.TryGetProperty("smtpTls", out var st)) emailSmtpTls = st.GetBoolean();
+                        if (root.TryGetProperty("imapHost", out var ih)) emailImapHost = ih.GetString() ?? "imap.gmail.com";
+                        if (root.TryGetProperty("imapPort", out var ip)) emailImapPort = ip.GetInt32();
+                        if (root.TryGetProperty("imapTls", out var it)) emailImapTls = it.GetBoolean();
+                        if (root.TryGetProperty("fromName", out var fn)) emailFromName = fn.GetString() ?? "";
+                        if (root.TryGetProperty("fromAddress", out var fa)) emailFromAddress = fa.GetString() ?? "";
+                        if (root.TryGetProperty("username", out var un)) emailUsername = un.GetString() ?? "";
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+    }
+
+    private async Task SaveEmail()
+    {
+        emailSaving = true;
+        try
+        {
+            var settings = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                smtpHost = emailSmtpHost,
+                smtpPort = emailSmtpPort,
+                smtpTls = emailSmtpTls,
+                imapHost = emailImapHost,
+                imapPort = emailImapPort,
+                imapTls = emailImapTls,
+                fromName = emailFromName,
+                fromAddress = emailFromAddress,
+                username = emailUsername
+            });
+
+            var request = new SaveIntegrationRequest
+            {
+                Provider = "email-smtp",
+                AppId = emailFromAddress,
+                AppSecret = string.IsNullOrWhiteSpace(emailPassword) ? null : emailPassword,
+                RedirectUrl = null,
+                Settings = settings,
+                IsActive = emailActive
+            };
+
+            var result = await Api.SaveIntegrationAsync(request);
+            if (result is not null)
+            {
+                emailId = result.Id;
+                emailHasSecret = result.HasSecret;
+                emailPassword = "";
+                ToastService.Success("Configuracion de Email guardada");
+                showEmailModal = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error al guardar: " + ex.Message);
+        }
+        finally
+        {
+            emailSaving = false;
+        }
+    }
+
+    private async Task DeleteEmail()
+    {
+        emailSaving = true;
+        try
+        {
+            var deleted = await Api.DeleteIntegrationAsync("email-smtp");
+            if (deleted)
+            {
+                emailId = 0;
+                emailPassword = "";
+                emailActive = false;
+                emailHasSecret = false;
+                emailSmtpHost = "smtp.gmail.com";
+                emailSmtpPort = 587;
+                emailSmtpTls = true;
+                emailImapHost = "imap.gmail.com";
+                emailImapPort = 993;
+                emailImapTls = true;
+                emailFromName = "";
+                emailFromAddress = "";
+                emailUsername = "";
+                showEmailModal = false;
+                ToastService.Success("Integracion de Email eliminada");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Error al eliminar: " + ex.Message);
+        }
+        finally
+        {
+            emailSaving = false;
+        }
+    }
+
+    private async Task TestEmail()
+    {
+        emailTesting = true;
+        StateHasChanged();
+        try
+        {
+            // Save first if needed
+            if (emailId == 0 || !string.IsNullOrWhiteSpace(emailPassword))
+            {
+                await SaveEmail();
+            }
+            var msg = await Api.TestEmailAsync();
+            if (!string.IsNullOrEmpty(msg))
+                ToastService.Success(msg);
+            else
+                ToastService.Error("No se pudo enviar el email de prueba");
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error(ex.Message);
+        }
+        finally
+        {
+            emailTesting = false;
+        }
+    }
+
+    private void ToggleAddMenu()
+    {
+        showAddMenu = !showAddMenu;
+    }
+
+    private void AddIntegration_ML()
+    {
+        showAddMenu = false;
+        OpenConfigModal();
+    }
+
+    private async Task AddIntegration_OpenAI()
+    {
+        showAddMenu = false;
+        await OpenOpenAiModal();
+    }
+
+    private async Task AddIntegration_Claude()
+    {
+        showAddMenu = false;
+        await OpenClaudeModal();
+    }
+
+    private void AddIntegration_Email()
+    {
+        showAddMenu = false;
+        OpenEmailModal();
+    }
+
+    private void OpenEmailModal() => showEmailModal = true;
+    private void CloseEmailModal() => showEmailModal = false;
+
+    private void OpenConfigModal()
     {
         mlError = null;
         mlSaved = false;

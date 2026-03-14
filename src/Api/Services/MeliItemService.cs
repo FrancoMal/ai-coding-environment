@@ -14,13 +14,17 @@ public class MeliItemService
     private readonly IHttpClientFactory _httpFactory;
     private readonly MeliAccountService _accountService;
     private readonly AuditLogService _auditLog;
+    private readonly AiService _aiService;
+    private readonly SyncProgressService _syncProgress;
 
-    public MeliItemService(AppDbContext db, IHttpClientFactory httpFactory, MeliAccountService accountService, AuditLogService auditLog)
+    public MeliItemService(AppDbContext db, IHttpClientFactory httpFactory, MeliAccountService accountService, AuditLogService auditLog, AiService aiService, SyncProgressService syncProgress)
     {
         _db = db;
         _httpFactory = httpFactory;
         _accountService = accountService;
         _auditLog = auditLog;
+        _aiService = aiService;
+        _syncProgress = syncProgress;
     }
 
     public async Task<MeliItemsResponse> GetItemsAsync(int? meliAccountId = null, string? status = null)
@@ -47,7 +51,7 @@ public class MeliItemService
                 i.Condition, i.ListingTypeId, i.InstallmentTag, i.FreeShipping, i.Thumbnail, i.Permalink,
                 i.Sku, i.UserProductId, i.FamilyId, i.FamilyName,
                 i.DateCreated, i.LastUpdated,
-                i.ProductId, i.Product != null ? i.Product.Title : null))
+                i.ProductId, i.Product != null ? i.Product.Title : null, i.Product != null ? (int?)i.Product.CriticalStock : null))
             .ToListAsync();
 
         return new MeliItemsResponse(items, total);
@@ -147,7 +151,7 @@ public class MeliItemService
             item.Condition, item.ListingTypeId, item.InstallmentTag, item.FreeShipping, item.Thumbnail, item.Permalink,
             item.Sku, item.UserProductId, item.FamilyId, item.FamilyName,
             item.DateCreated, item.LastUpdated,
-            item.ProductId, item.Product?.Title);
+            item.ProductId, item.Product?.Title, item.Product != null ? (int?)item.Product.CriticalStock : null);
     }
 
     public async Task<MeliItemDto> LinkToProductAsync(string meliItemId, int productId)
@@ -174,7 +178,7 @@ public class MeliItemService
             item.Condition, item.ListingTypeId, item.InstallmentTag, item.FreeShipping, item.Thumbnail, item.Permalink,
             item.Sku, item.UserProductId, item.FamilyId, item.FamilyName,
             item.DateCreated, item.LastUpdated,
-            item.ProductId, item.Product?.Title);
+            item.ProductId, item.Product?.Title, item.Product != null ? (int?)item.Product.CriticalStock : null);
     }
 
     public async Task<MeliItemDto> UnlinkProductAsync(string meliItemId)
@@ -197,7 +201,7 @@ public class MeliItemService
             item.Condition, item.ListingTypeId, item.InstallmentTag, item.FreeShipping, item.Thumbnail, item.Permalink,
             item.Sku, item.UserProductId, item.FamilyId, item.FamilyName,
             item.DateCreated, item.LastUpdated,
-            null, null);
+            null, null, null);
     }
 
     public async Task<int> DeleteItemsAsync(List<int> ids)
@@ -442,7 +446,7 @@ public class MeliItemService
         return result;
     }
 
-    public async Task<MeliItemSyncResult> SyncItemsAsync(string? statusFilter = null, int? accountId = null)
+    public async Task<MeliItemSyncResult> SyncItemsAsync(string? statusFilter = null, int? accountId = null, string? progressId = null)
     {
         var accounts = await _accountService.GetAllAccountEntitiesAsync();
 
@@ -450,12 +454,28 @@ public class MeliItemService
         if (accountId.HasValue)
             accounts = accounts.Where(a => a.Id == accountId.Value).ToList();
 
+        // Start progress tracking
+        progressId ??= _syncProgress.StartSync("Sincronizando publicaciones");
+        _syncProgress.Update(progressId, p =>
+        {
+            p.TotalAccounts = accounts.Count;
+            p.CurrentStep = "Iniciando sincronizacion...";
+        });
+
         int totalSynced = 0;
         int totalErrors = 0;
         var errors = new List<string>();
 
-        foreach (var account in accounts)
+        for (int i = 0; i < accounts.Count; i++)
         {
+            var account = accounts[i];
+            _syncProgress.Update(progressId, p =>
+            {
+                p.AccountIndex = i + 1;
+                p.CurrentAccount = account.Nickname;
+                p.CurrentStep = $"Obteniendo publicaciones de {account.Nickname}...";
+            });
+
             try
             {
                 var token = await _accountService.GetValidTokenAsync(account);
@@ -463,16 +483,18 @@ public class MeliItemService
                 {
                     errors.Add($"Token expirado para {account.Nickname}");
                     totalErrors++;
+                    _syncProgress.Update(progressId, p => p.TotalErrors = totalErrors);
                     continue;
                 }
 
-                var synced = await SyncItemsForAccountAsync(account, token, statusFilter);
+                var synced = await SyncItemsForAccountAsync(account, token, statusFilter, progressId);
                 totalSynced += synced;
             }
             catch (Exception ex)
             {
                 errors.Add($"Error en {account.Nickname}: {ex.Message}");
                 totalErrors++;
+                _syncProgress.Update(progressId, p => p.TotalErrors = totalErrors);
             }
         }
 
@@ -489,10 +511,14 @@ public class MeliItemService
         var syncJson = System.Text.Json.JsonSerializer.Serialize(auditData);
         await _auditLog.LogAsync("Sync", "items", "SYNC", syncJson);
 
+        // Complete progress
+        _syncProgress.Complete(progressId, $"Sincronizados {totalSynced} items, {totalErrors} errores");
+        _syncProgress.Cleanup();
+
         return new MeliItemSyncResult(totalSynced, totalErrors, errors);
     }
 
-    private async Task<int> SyncItemsForAccountAsync(MeliAccount account, string token, string? statusFilter = null)
+    private async Task<int> SyncItemsForAccountAsync(MeliAccount account, string token, string? statusFilter = null, string? progressId = null)
     {
         var http = _httpFactory.CreateClient();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -562,6 +588,16 @@ public class MeliItemService
                 break;
         }
 
+        // Report found items
+        if (progressId is not null)
+        {
+            _syncProgress.Update(progressId, p =>
+            {
+                p.TotalItemsFound += allItemIds.Count;
+                p.CurrentStep = $"{account.Nickname}: {allItemIds.Count} publicaciones encontradas, descargando detalles...";
+            });
+        }
+
         // Step 2: Batch fetch item details (20 at a time)
         int synced = 0;
         for (int i = 0; i < allItemIds.Count; i += 20)
@@ -586,6 +622,19 @@ public class MeliItemService
             }
 
             await _db.SaveChangesAsync();
+
+            // Update progress
+            if (progressId is not null)
+            {
+                var currentSynced = Math.Min(i + 20, allItemIds.Count);
+                _syncProgress.Update(progressId, p =>
+                {
+                    p.ItemsSynced += batch.Count;
+                    p.CurrentStep = $"{account.Nickname}: {currentSynced}/{allItemIds.Count} items procesados";
+                    if (p.TotalItemsFound > 0)
+                        p.Percentage = (int)((double)p.ItemsSynced / p.TotalItemsFound * 80); // 80% for items, 20% for promos/categories
+                });
+            }
         }
 
         // Step 3: Marcar como "deleted" las publicaciones que ya no existen en MeLi
@@ -614,6 +663,15 @@ public class MeliItemService
         }
 
         // Step 4: Sync promotional prices for active items
+        if (progressId is not null)
+        {
+            _syncProgress.Update(progressId, p =>
+            {
+                p.CurrentStep = $"{account.Nickname}: Sincronizando precios promocionales...";
+                p.Percentage = Math.Max(p.Percentage, 80);
+            });
+        }
+
         // The items API does not include promotional discounts, so we use /items/{id}/sale_price
         var activeItems = await _db.MeliItems
             .Where(i => i.MeliAccountId == account.Id && i.Status == "active")
@@ -664,7 +722,16 @@ public class MeliItemService
 
         await _db.SaveChangesAsync();
 
-        // Step 4: Sync category paths for items missing CategoryPath
+        // Step 5: Sync category paths for items missing CategoryPath
+        if (progressId is not null)
+        {
+            _syncProgress.Update(progressId, p =>
+            {
+                p.CurrentStep = $"{account.Nickname}: Sincronizando categorias...";
+                p.Percentage = Math.Max(p.Percentage, 90);
+            });
+        }
+
         var itemsMissingCatPath = await _db.MeliItems
             .Where(i => i.MeliAccountId == account.Id && i.CategoryId != null && i.CategoryPath == null)
             .Select(i => new { i.Id, i.CategoryId })
@@ -1181,7 +1248,7 @@ public class MeliItemService
             };
             // Cuentas con user_product_seller usan family_name en vez de title
             if (isUserProductSeller)
-                itemBody["family_name"] = request.Title;
+                itemBody["family_name"] = request.FamilyName ?? request.Title;
             else
                 itemBody["title"] = request.Title;
             if (pictures.Any()) itemBody["pictures"] = pictures;
@@ -1194,7 +1261,79 @@ public class MeliItemService
             if (!meliResponse.IsSuccessStatusCode)
             {
                 var errorBody = await meliResponse.Content.ReadAsStringAsync();
-                return new PublishItemResponse { Error = $"Error de MercadoLibre ({meliResponse.StatusCode}): {errorBody}" };
+                var statusCode = (int)meliResponse.StatusCode;
+
+                if (statusCode == 400)
+                {
+                    // CASO 1: Titulo demasiado largo - truncar y reintentar
+                    if (!request.TitleTruncated && TryExtractMaxTitleLength(errorBody, out int maxLen))
+                    {
+                        request.Title = request.Title.Length > maxLen ? request.Title[..maxLen] : request.Title;
+                        if (request.FamilyName != null && request.FamilyName.Length > maxLen)
+                            request.FamilyName = request.FamilyName[..maxLen];
+                        request.TitleTruncated = true;
+                        return await PublishItemAsync(request);
+                    }
+
+                    // CASO 2: Atributos faltantes/obligatorios - sugerir con IA y reintentar
+                    if (!request.AiRetried && IsAttributeRequiredError(errorBody))
+                    {
+                        try
+                        {
+                            var aiAttributes = await SuggestAttributesWithAiAsync(request, http);
+                            if (aiAttributes.Any())
+                            {
+                                var existingIds = request.Attributes.Select(a => a.Id).ToHashSet();
+                                foreach (var suggestion in aiAttributes)
+                                {
+                                    if (!existingIds.Contains(suggestion.Id))
+                                        request.Attributes.Add(suggestion);
+                                }
+                                request.AiRetried = true;
+                                return await PublishItemAsync(request);
+                            }
+                        }
+                        catch { }
+                    }
+
+                    // CASO 3: Valor de atributo no resuelto - quitar value_id y dejar solo value_name
+                    if (!request.ValuesStripped && IsAttributeValueNotResolvedError(errorBody))
+                    {
+                        foreach (var attr in request.Attributes)
+                        {
+                            if (attr.ValueId != null)
+                            {
+                                if (string.IsNullOrEmpty(attr.ValueName))
+                                    attr.ValueName = attr.ValueId;
+                                attr.ValueId = null;
+                            }
+                        }
+                        request.ValuesStripped = true;
+                        return await PublishItemAsync(request);
+                    }
+
+                    // CASO 4: GTIN requerido - bypass: modificar BRAND temporalmente, publicar, luego restaurar
+                    if (!request.GtinBypassed && IsGtinRequiredError(errorBody))
+                    {
+                        var brandAttr = request.Attributes.FirstOrDefault(a => a.Id == "BRAND");
+                        if (brandAttr != null)
+                        {
+                            request.OriginalBrand = brandAttr.ValueName ?? brandAttr.ValueId;
+                            brandAttr.ValueName = "XXX-" + (brandAttr.ValueName ?? brandAttr.ValueId ?? "SinMarca");
+                            brandAttr.ValueId = null; // Forzar value_name para el bypass
+                        }
+                        else
+                        {
+                            // Si no tiene BRAND, agregar uno temporal
+                            request.OriginalBrand = null;
+                            request.Attributes.Add(new PublishAttributeDto { Id = "BRAND", ValueName = "XXX-SinMarca" });
+                        }
+                        request.GtinBypassed = true;
+                        return await PublishItemAsync(request);
+                    }
+                }
+
+                return new PublishItemResponse { Error = FormatMeliError(errorBody) };
             }
             var responseJson = await meliResponse.Content.ReadAsStringAsync();
             using var responseDoc = JsonDocument.Parse(responseJson);
@@ -1235,6 +1374,34 @@ public class MeliItemService
             }
             _db.MeliItems.Add(newItem);
             await _db.SaveChangesAsync();
+
+            // Si se uso el bypass de GTIN, restaurar la marca original via PUT
+            if (request.GtinBypassed)
+            {
+                try
+                {
+                    var brandFix = new List<object>();
+                    if (request.OriginalBrand != null)
+                        brandFix.Add(new { id = "BRAND", value_name = request.OriginalBrand });
+                    else
+                    {
+                        // Buscar la marca original del atributo (sin el prefijo XXX-)
+                        var currentBrand = request.Attributes.FirstOrDefault(a => a.Id == "BRAND");
+                        var fixedName = currentBrand?.ValueName?.StartsWith("XXX-") == true
+                            ? currentBrand.ValueName[4..] : currentBrand?.ValueName;
+                        if (!string.IsNullOrEmpty(fixedName))
+                            brandFix.Add(new { id = "BRAND", value_name = fixedName });
+                    }
+                    if (brandFix.Any())
+                    {
+                        var fixBody = JsonSerializer.Serialize(new { attributes = brandFix });
+                        var fixContent = new StringContent(fixBody, Encoding.UTF8, "application/json");
+                        await http.PutAsync($"https://api.mercadolibre.com/items/{meliItemId}", fixContent);
+                    }
+                }
+                catch { /* Si falla la restauracion de marca, la publicacion ya fue creada */ }
+            }
+
             await _auditLog.LogAsync("MeliItem", meliItemId, "PUBLISH",
                 JsonSerializer.Serialize(new { titulo = request.Title, cuenta = account.Nickname, categoria = request.CategoryId }));
             return new PublishItemResponse { Success = true, MeliItemId = meliItemId, Permalink = permalink };
@@ -1291,5 +1458,469 @@ public class MeliItemService
         }
         catch { return null; }
     }
+
+    /// <summary>
+    /// Propaga el stock de un producto a todas sus publicaciones activas en MercadoLibre.
+    /// Actualiza via API de MeLi y luego en la base de datos local.
+    /// </summary>
+    public async Task PropagateStockAsync(int productId, int newStock)
+    {
+        var items = await _db.MeliItems
+            .Include(i => i.MeliAccount)
+            .Where(i => i.ProductId == productId && i.Status == "active")
+            .ToListAsync();
+
+        if (!items.Any()) return;
+
+        foreach (var item in items)
+        {
+            if (item.MeliAccount is null) continue;
+            try
+            {
+                var token = await _accountService.GetValidTokenAsync(item.MeliAccount);
+                if (token is null) continue;
+
+                var http = _httpFactory.CreateClient();
+                http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+                var payload = JsonSerializer.Serialize(new { available_quantity = newStock });
+                var content = new StringContent(payload, Encoding.UTF8, "application/json");
+                var response = await http.PutAsync($"https://api.mercadolibre.com/items/{item.MeliItemId}", content);
+
+                // Retry con token refrescado si da 401/403
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                    response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    var newToken = await _accountService.GetValidTokenAsync(item.MeliAccount, forceRefresh: true);
+                    if (newToken is not null)
+                    {
+                        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", newToken);
+                        content = new StringContent(payload, Encoding.UTF8, "application/json");
+                        response = await http.PutAsync($"https://api.mercadolibre.com/items/{item.MeliItemId}", content);
+                    }
+                }
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var oldStock = item.AvailableQuantity;
+                    item.AvailableQuantity = newStock;
+                    item.UpdatedAt = DateTime.UtcNow;
+                    item.LastUpdated = DateTime.UtcNow;
+
+                    await _auditLog.LogAsync("MeliItem", item.MeliItemId, "STOCK_SYNC",
+                        JsonSerializer.Serialize(new { old = oldStock, @new = newStock, source = "product_update" }));
+                }
+            }
+            catch { /* Si falla una publicacion, continuar con las demas */ }
+        }
+
+        await _db.SaveChangesAsync();
+    }
+
+        public async Task<BulkPublishResponse> BulkPublishAsync(BulkPublishRequest request)
+    {
+        var response = new BulkPublishResponse { Total = request.ProductIds.Count };
+
+        // Validar cuenta
+        var account = await _db.MeliAccounts.FindAsync(request.MeliAccountId);
+        if (account is null)
+        {
+            response.Failed = response.Total;
+            response.Results = request.ProductIds.Select(id => new BulkPublishItemResult
+            { ProductId = id, Error = "Cuenta no encontrada" }).ToList();
+            return response;
+        }
+
+        // Cargar productos
+        var products = await _db.Products
+            .Where(p => request.ProductIds.Contains(p.Id))
+            .ToListAsync();
+
+        // Cargar items existentes vinculados a estos productos (en cualquier cuenta)
+        var existingItems = await _db.MeliItems
+            .Where(i => i.ProductId != null && request.ProductIds.Contains(i.ProductId.Value))
+            .ToListAsync();
+
+        // Items que ya estan publicados en la cuenta destino (para skip)
+        var alreadyOnTargetAccount = existingItems
+            .Where(i => i.MeliAccountId == request.MeliAccountId)
+            .Select(i => i.ProductId!.Value)
+            .ToHashSet();
+
+        // Items en OTRAS cuentas (para copiar datos)
+        var itemsOnOtherAccounts = existingItems
+            .Where(i => i.MeliAccountId != request.MeliAccountId)
+            .GroupBy(i => i.ProductId!.Value)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        foreach (var productId in request.ProductIds)
+        {
+            var product = products.FirstOrDefault(p => p.Id == productId);
+            if (product is null)
+            {
+                response.Results.Add(new BulkPublishItemResult
+                { ProductId = productId, Error = "Producto no encontrado" });
+                response.Failed++;
+                continue;
+            }
+
+            // Skip si ya esta publicado en la cuenta destino
+            if (alreadyOnTargetAccount.Contains(productId))
+            {
+                response.Results.Add(new BulkPublishItemResult
+                { ProductId = productId, ProductTitle = product.Title, Skipped = true, SkipReason = "Ya publicado en esta cuenta" });
+                response.Skipped++;
+                continue;
+            }
+
+            // Calcular precio segun modo
+            decimal price;
+            if (request.PriceMode == "pvp")
+                price = product.RetailPrice > 0 ? product.RetailPrice : product.CostPrice;
+            else
+                price = Math.Round(product.CostPrice * (1 + request.MarkupPercent / 100), 2);
+            if (price <= 0) price = 1;
+
+            // Construir request de publicacion
+            var publishRequest = new PublishItemRequest
+            {
+                ProductId = productId,
+                MeliAccountId = request.MeliAccountId,
+                Title = product.Title,
+                Description = product.Description,
+                Price = price,
+                AvailableQuantity = product.Stock > 0 ? product.Stock : 1,
+                Condition = request.Condition,
+                ListingTypeId = request.ListingTypeId,
+                FreeShipping = request.FreeShipping,
+                PictureUrls = new List<string>()
+            };
+
+            // Si tiene publicacion en otra cuenta, copiar datos completos de MeLi
+            if (itemsOnOtherAccounts.TryGetValue(productId, out var existingItem))
+            {
+                if (!string.IsNullOrEmpty(existingItem.CategoryId))
+                    publishRequest.CategoryId = existingItem.CategoryId;
+
+                // Obtener datos completos de la publicacion existente via API de MeLi
+                try
+                {
+                    var sourceAccount = await _db.MeliAccounts.FindAsync(existingItem.MeliAccountId);
+                    var sourceToken = sourceAccount != null ? await _accountService.GetValidTokenAsync(sourceAccount) : null;
+                    if (sourceToken != null)
+                    {
+                        var srcHttp = _httpFactory.CreateClient();
+                        srcHttp.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sourceToken);
+
+                        // Obtener item completo (atributos + fotos)
+                        var itemResp = await srcHttp.GetAsync($"https://api.mercadolibre.com/items/{existingItem.MeliItemId}");
+                        if (itemResp.IsSuccessStatusCode)
+                        {
+                            var itemJson = await itemResp.Content.ReadAsStringAsync();
+                            using var itemDoc = JsonDocument.Parse(itemJson);
+                            var root = itemDoc.RootElement;
+
+                            // Copiar family_name si existe
+                            if (root.TryGetProperty("family_name", out var fn) && fn.ValueKind != JsonValueKind.Null)
+                            {
+                                var familyName = fn.GetString();
+                                if (!string.IsNullOrEmpty(familyName))
+                                    publishRequest.FamilyName = familyName;
+                            }
+
+                            // Copiar atributos (solo los que tienen valor)
+                            if (root.TryGetProperty("attributes", out var attrs) && attrs.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var attr in attrs.EnumerateArray())
+                                {
+                                    var attrId = attr.TryGetProperty("id", out var aid) ? aid.GetString() : null;
+                                    if (string.IsNullOrEmpty(attrId)) continue;
+                                    // Saltar atributos que MeLi maneja automaticamente
+                                    var autoAttrs = new[] { "ITEM_CONDITION", "SELLER_SKU", "GTIN" };
+                                    if (autoAttrs.Contains(attrId)) continue;
+
+                                    var valueId = attr.TryGetProperty("value_id", out var vid) && vid.ValueKind != JsonValueKind.Null ? vid.GetString() : null;
+                                    var valueName = attr.TryGetProperty("value_name", out var vn) && vn.ValueKind != JsonValueKind.Null ? vn.GetString() : null;
+                                    if ((valueId != null && valueId != "-1") || (valueName != null && valueName != "-1"))
+                                    {
+                                        if (valueId == "-1") valueId = null;
+                                        publishRequest.Attributes.Add(new PublishAttributeDto { Id = attrId, ValueId = valueId, ValueName = valueName });
+                                    }
+                                }
+                            }
+
+                            // Copiar fotos de la publicacion existente
+                            if (root.TryGetProperty("pictures", out var pics) && pics.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var pic in pics.EnumerateArray())
+                                {
+                                    var picUrl = pic.TryGetProperty("secure_url", out var su) ? su.GetString() : null;
+                                    if (string.IsNullOrEmpty(picUrl) && pic.TryGetProperty("url", out var u))
+                                        picUrl = u.GetString();
+                                    if (!string.IsNullOrEmpty(picUrl))
+                                        publishRequest.PictureUrls.Add(picUrl);
+                                }
+                            }
+                        }
+
+                        // Obtener descripcion de la publicacion existente
+                        if (string.IsNullOrWhiteSpace(publishRequest.Description))
+                        {
+                            var descResp = await srcHttp.GetAsync($"https://api.mercadolibre.com/items/{existingItem.MeliItemId}/description");
+                            if (descResp.IsSuccessStatusCode)
+                            {
+                                var descJson = await descResp.Content.ReadAsStringAsync();
+                                using var descDoc = JsonDocument.Parse(descJson);
+                                if (descDoc.RootElement.TryGetProperty("plain_text", out var pt) && pt.ValueKind != JsonValueKind.Null)
+                                {
+                                    var descText = pt.GetString();
+                                    if (!string.IsNullOrWhiteSpace(descText))
+                                        publishRequest.Description = descText;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { /* Si falla la consulta a MeLi, continuar con los datos que tenemos */ }
+            }
+
+            // Agregar fotos del producto local (si no se copiaron fotos de MeLi)
+            if (!publishRequest.PictureUrls.Any())
+            {
+                if (!string.IsNullOrEmpty(product.Photo1)) publishRequest.PictureUrls.Add(product.Photo1);
+                if (!string.IsNullOrEmpty(product.Photo2)) publishRequest.PictureUrls.Add(product.Photo2);
+                if (!string.IsNullOrEmpty(product.Photo3)) publishRequest.PictureUrls.Add(product.Photo3);
+            }
+
+            // Si no tiene categoria (ni de publicacion existente), predecir
+            if (string.IsNullOrEmpty(publishRequest.CategoryId))
+            {
+                try
+                {
+                    var predictions = await PredictCategoryAsync(product.Title, request.MeliAccountId);
+                    if (predictions.Any())
+                        publishRequest.CategoryId = predictions.First().CategoryId;
+                }
+                catch { }
+            }
+
+            if (string.IsNullOrEmpty(publishRequest.CategoryId))
+            {
+                response.Results.Add(new BulkPublishItemResult
+                { ProductId = productId, ProductTitle = product.Title, Error = "No se pudo determinar la categoria" });
+                response.Failed++;
+                continue;
+            }
+
+            // Publicar
+            var result = await PublishItemAsync(publishRequest);
+            response.Results.Add(new BulkPublishItemResult
+            {
+                ProductId = productId,
+                ProductTitle = product.Title,
+                Success = result.Success,
+                MeliItemId = result.MeliItemId,
+                Permalink = result.Permalink,
+                Error = result.Error
+            });
+            if (result.Success) response.Successful++;
+            else response.Failed++;
+        }
+
+        return response;
+    }
+
+
+    /// <summary>
+    /// Extrae el largo maximo del titulo del error de MeLi.
+    /// Ej: "Category MLA123 does not support titles greater than 60 characters long"
+    /// </summary>
+    private bool TryExtractMaxTitleLength(string errorBody, out int maxLength)
+    {
+        maxLength = 0;
+        if (string.IsNullOrEmpty(errorBody)) return false;
+        var lower = errorBody.ToLower();
+        if (!lower.Contains("title") || !lower.Contains("character")) return false;
+        // Buscar patron "greater than N characters" o "than N characters"
+        var match = System.Text.RegularExpressions.Regex.Match(errorBody, @"(?:greater\s+than|exceeds?|max(?:imum)?(?:\s+of)?)\s+(\d+)\s+character", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var len))
+        {
+            maxLength = len;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Detecta si el error de MeLi es por atributos obligatorios faltantes
+    /// </summary>
+    private bool IsAttributeRequiredError(string errorBody)
+    {
+        if (string.IsNullOrEmpty(errorBody)) return false;
+        var lower = errorBody.ToLower();
+        return (lower.Contains("attribute") || lower.Contains("atributo") || lower.Contains("item.attributes")) &&
+               (lower.Contains("required") || lower.Contains("missing") ||
+                lower.Contains("obligator") || lower.Contains("requerid") || lower.Contains("must have"));
+    }
+
+    /// <summary>
+    /// Detecta si el error es por valor de atributo no resuelto.
+    /// Ej: "Value name of attribute BRAND was not provided and couldn't be resolved"
+    /// </summary>
+    private bool IsAttributeValueNotResolvedError(string errorBody)
+    {
+        if (string.IsNullOrEmpty(errorBody)) return false;
+        var lower = errorBody.ToLower();
+        return lower.Contains("couldn't be resolved") || lower.Contains("could not be resolved") ||
+               lower.Contains("was not provided") || lower.Contains("invalid value") ||
+               (lower.Contains("attribute") && lower.Contains("not found"));
+    }
+
+    /// <summary>
+    /// Consulta a OpenAI para sugerir atributos y los devuelve como PublishAttributeDto.
+    /// Valida que los value_id sugeridos existan en los valores predefinidos de MeLi.
+    /// </summary>
+    private async Task<List<PublishAttributeDto>> SuggestAttributesWithAiAsync(PublishItemRequest request, HttpClient http)
+    {
+        // Obtener atributos de la categoria
+        var categoryAttrs = await GetCategoryAttributesAsync(request.CategoryId);
+        if (!categoryAttrs.Any()) return new List<PublishAttributeDto>();
+
+        // Obtener nombre de la categoria
+        var categoryName = request.CategoryId;
+        try
+        {
+            var catResp = await http.GetAsync($"https://api.mercadolibre.com/categories/{request.CategoryId}");
+            if (catResp.IsSuccessStatusCode)
+            {
+                var catJson = await catResp.Content.ReadAsStringAsync();
+                using var catDoc = JsonDocument.Parse(catJson);
+                if (catDoc.RootElement.TryGetProperty("name", out var cn))
+                    categoryName = cn.GetString() ?? request.CategoryId;
+            }
+        }
+        catch { }
+
+        // Obtener datos del producto
+        var product = await _db.Products.FindAsync(request.ProductId);
+
+        // Pedir sugerencias a la IA
+        var suggestRequest = new SuggestAttributesRequest(
+            Title: request.Title,
+            Description: request.Description,
+            Brand: product?.Brand,
+            Model: product?.Model,
+            CategoryId: request.CategoryId,
+            CategoryName: categoryName,
+            Attributes: categoryAttrs
+        );
+
+        var suggestions = await _aiService.SuggestAttributesAsync(suggestRequest);
+
+        // Validar sugerencias contra valores predefinidos de MeLi
+        var attrLookup = categoryAttrs.ToDictionary(a => a.Id, a => a);
+        var result = new List<PublishAttributeDto>();
+        foreach (var s in suggestions)
+        {
+            if (string.IsNullOrEmpty(s.ValueId) && string.IsNullOrEmpty(s.ValueName))
+                continue;
+
+            if (attrLookup.TryGetValue(s.AttributeId, out var catAttr) && catAttr.Values.Any())
+            {
+                // El atributo tiene valores predefinidos: validar que el value_id exista
+                var matchById = catAttr.Values.FirstOrDefault(v => v.Id == s.ValueId);
+                if (matchById != null)
+                {
+                    // value_id valido
+                    result.Add(new PublishAttributeDto { Id = s.AttributeId, ValueId = matchById.Id, ValueName = matchById.Name });
+                }
+                else
+                {
+                    // value_id no valido: buscar por nombre mas similar
+                    var matchByName = catAttr.Values.FirstOrDefault(v =>
+                        string.Equals(v.Name, s.ValueName, StringComparison.OrdinalIgnoreCase));
+                    if (matchByName != null)
+                    {
+                        result.Add(new PublishAttributeDto { Id = s.AttributeId, ValueId = matchByName.Id, ValueName = matchByName.Name });
+                    }
+                    else if (!string.IsNullOrEmpty(s.ValueName))
+                    {
+                        // No hay match exacto: enviar solo value_name sin value_id
+                        result.Add(new PublishAttributeDto { Id = s.AttributeId, ValueId = null, ValueName = s.ValueName });
+                    }
+                }
+            }
+            else
+            {
+                // Atributo de texto libre: enviar solo value_name sin value_id
+                result.Add(new PublishAttributeDto { Id = s.AttributeId, ValueId = null, ValueName = s.ValueName });
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Detecta si el error es por GTIN requerido.
+    /// Ej: "The attributes [GTIN] are required for category MLA1234"
+    /// </summary>
+    private bool IsGtinRequiredError(string errorBody)
+    {
+        if (string.IsNullOrEmpty(errorBody)) return false;
+        var lower = errorBody.ToLower();
+        return lower.Contains("gtin") && (lower.Contains("required") || lower.Contains("requerid") || lower.Contains("obligator"));
+    }
+
+    /// <summary>
+    /// Parsea el JSON de error de MeLi y extrae mensajes legibles.
+    /// Separa errores de warnings, muestra solo el campo "message".
+    /// </summary>
+    private string FormatMeliError(string errorBody)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(errorBody);
+            var root = doc.RootElement;
+            var errors = new List<string>();
+            var warnings = new List<string>();
+
+            // Mensaje principal
+            if (root.TryGetProperty("message", out var mainMsg))
+            {
+                var msg = mainMsg.GetString();
+                if (!string.IsNullOrEmpty(msg) && msg != "Validation error")
+                    errors.Add(msg);
+            }
+
+            // Array "cause" con detalles
+            if (root.TryGetProperty("cause", out var causes) && causes.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var cause in causes.EnumerateArray())
+                {
+                    var message = cause.TryGetProperty("message", out var m) ? m.GetString() : null;
+                    if (string.IsNullOrEmpty(message)) continue;
+                    var type = cause.TryGetProperty("type", out var t) ? t.GetString() : "error";
+                    if (type == "warning")
+                        warnings.Add(message);
+                    else
+                        errors.Add(message);
+                }
+            }
+
+            if (!errors.Any() && !warnings.Any())
+                return errorBody.Length > 200 ? errorBody[..200] + "..." : errorBody;
+
+            var parts = new List<string>();
+            foreach (var e in errors)
+                parts.Add("[ERROR] " + e);
+            foreach (var w in warnings)
+                parts.Add("[WARN] " + w);
+            return string.Join("|||", parts);
+        }
+        catch
+        {
+            return errorBody.Length > 300 ? errorBody[..300] + "..." : errorBody;
+        }
+    }
+
 
 }

@@ -29,8 +29,12 @@ public record MeliOrderDto(
     string ItemTitle,
     int Quantity,
     decimal UnitPrice,
+    decimal? FullUnitPrice,
     long? ShippingId,
-    long? PackId
+    long? PackId,
+    string? ItemThumbnailUrl,
+    string? ShippingStatus,
+    string? ShippingSubstatus
 );
 
 public record MeliOrdersResponse(List<MeliOrderDto> Orders, int Total);
@@ -125,7 +129,8 @@ public record MeliItemDto(
     DateTime? DateCreated,
     DateTime? LastUpdated,
     int? ProductId,
-    string? ProductTitle
+    string? ProductTitle,
+    int? ProductCriticalStock
 );
 
 public record MeliItemsResponse(List<MeliItemDto> Items, int Total);
@@ -235,6 +240,13 @@ public class PublishItemRequest
     public bool FreeShipping { get; set; } = true;
     public List<PublishAttributeDto> Attributes { get; set; } = new();
     public List<string> PictureUrls { get; set; } = new();
+    public string? FamilyName { get; set; }
+    // Internal: prevents infinite retry loops
+    internal bool AiRetried { get; set; }
+    internal bool TitleTruncated { get; set; }
+    internal bool ValuesStripped { get; set; }
+    internal bool GtinBypassed { get; set; }
+    internal string? OriginalBrand { get; set; }
 }
 
 public class PublishAttributeDto
@@ -261,4 +273,36 @@ public class BulkCreateProductResult
     public int Created { get; set; }
     public int Skipped { get; set; }
     public List<string> SkippedMessages { get; set; } = new();
+}
+
+public class BulkPublishRequest
+{
+    public List<int> ProductIds { get; set; } = new();
+    public int MeliAccountId { get; set; }
+    public string ListingTypeId { get; set; } = "gold_special";
+    public string PriceMode { get; set; } = "markup"; // "markup" o "pvp"
+    public decimal MarkupPercent { get; set; }
+    public string Condition { get; set; } = "new";
+    public bool FreeShipping { get; set; }
+}
+
+public class BulkPublishResponse
+{
+    public int Total { get; set; }
+    public int Successful { get; set; }
+    public int Failed { get; set; }
+    public int Skipped { get; set; }
+    public List<BulkPublishItemResult> Results { get; set; } = new();
+}
+
+public class BulkPublishItemResult
+{
+    public int ProductId { get; set; }
+    public string ProductTitle { get; set; } = "";
+    public bool Success { get; set; }
+    public bool Skipped { get; set; }
+    public string? SkipReason { get; set; }
+    public string? MeliItemId { get; set; }
+    public string? Permalink { get; set; }
+    public string? Error { get; set; }
 }
